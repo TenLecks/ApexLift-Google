@@ -134,10 +134,20 @@ export interface Badge {
   tier?: 'bronze' | 'silver' | 'gold' | 'platinum';
 }
 
+export interface PastCycle {
+  cycleNumber: number;
+  startDate: string;
+  endDate: string;
+  completedWorkouts: CompletedWorkoutSession[];
+  bonusSessions: BonusSessionLog[];
+}
+
 export interface UserFitnessProfile {
   name: string;
   weightUnit: WeightUnit;
   currentWeek: number;
+  currentCycle?: number; // 1-indexed cycle count
+  pastCycles?: PastCycle[];
   streakWeeks: number;
   bestStreakWeeks: number;
   totalXp: number;
@@ -154,6 +164,8 @@ export interface UserFitnessProfile {
     baseWorkingWeights?: Record<string, number>;
     hasWeightChanged?: boolean;
   } | null;
+  exerciseNotes?: Record<string, string>; // persistent per-exercise notes by exerciseId
+  skippedWeeks?: number[]; // weeks marked as skipped in current cycle
 }
 
 export interface ReadinessScore {

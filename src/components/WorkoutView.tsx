@@ -35,6 +35,8 @@ import {
   ChevronRight,
   Calculator,
   ArrowRightLeft,
+  StickyNote,
+  FileText,
 } from 'lucide-react';
 
 interface WorkoutViewProps {
@@ -43,9 +45,107 @@ interface WorkoutViewProps {
   onFinishWorkout: (session: CompletedWorkoutSession) => void;
   onOpenRirGuide: () => void;
   onUpdateDraft?: (draft: UserFitnessProfile['activeWorkoutDraft']) => void;
+  onUpdateExerciseNote?: (exerciseId: string, note: string) => void;
 }
 
 export type MobileLayoutMode = 'stepper' | 'focus' | 'table';
+
+const ExerciseTargetAndNotes: React.FC<{
+  exercise: ExerciseDefinition;
+  loggedEx: LoggedExercise;
+  selectedWeek: number;
+  profile: UserFitnessProfile;
+  editingNoteId: string | null;
+  onSetEditingNoteId: (id: string | null) => void;
+  onNoteChange: (exerciseId: string, note: string) => void;
+}> = ({
+  exercise,
+  loggedEx,
+  selectedWeek,
+  profile,
+  editingNoteId,
+  onSetEditingNoteId,
+  onNoteChange,
+}) => {
+  const smartTarget = generateSmartTarget(
+    exercise,
+    selectedWeek,
+    profile.completedWorkouts,
+    profile.weightUnit,
+    loggedEx.chosenSubstitution,
+    profile.pastCycles
+  );
+
+  const isEditing = editingNoteId === exercise.id;
+  const currentNote = loggedEx.notes ?? (profile.exerciseNotes?.[exercise.id] || '');
+
+  return (
+    <div className="space-y-1.5 pt-1 text-xs">
+      {/* Last Time & Target Reason */}
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-semibold text-emerald-400">
+            {smartTarget.previousBestWeight !== undefined && smartTarget.previousBestReps !== undefined
+              ? `Last time: ${smartTarget.previousBestWeight}${profile.weightUnit} × ${smartTarget.previousBestReps}`
+              : 'First time — calibrate today'}
+          </span>
+          {smartTarget.previousSessionDate && (
+            <span className="text-[11px] text-zinc-500 font-mono">
+              • {new Date(smartTarget.previousSessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          )}
+        </div>
+        {smartTarget.reason && (
+          <p className="text-[11px] text-zinc-400 leading-snug">{smartTarget.reason}</p>
+        )}
+      </div>
+
+      {/* Per-Exercise Persistent Note */}
+      <div>
+        {isEditing ? (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <input
+              type="text"
+              placeholder="e.g. seat height 4, pin position..."
+              value={currentNote}
+              onChange={(e) => onNoteChange(exercise.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSetEditingNoteId(null);
+              }}
+              className="flex-1 min-w-0 bg-zinc-950 border border-zinc-700 px-2.5 py-1 rounded-lg text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500"
+              autoFocus
+            />
+            <button
+              onClick={() => onSetEditingNoteId(null)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 font-medium shrink-0"
+            >
+              Done
+            </button>
+          </div>
+        ) : currentNote ? (
+          <div className="flex items-center gap-1.5 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+            <StickyNote className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate flex-1 font-medium text-[11px]">{currentNote}</span>
+            <button
+              onClick={() => onSetEditingNoteId(exercise.id)}
+              className="text-[10px] text-amber-400 hover:underline shrink-0 font-semibold"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => onSetEditingNoteId(exercise.id)}
+            className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-emerald-400 font-medium transition"
+          >
+            <FileText className="w-3 h-3" />
+            <span>+ Add note</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const WorkoutView: React.FC<WorkoutViewProps> = ({
   profile,
@@ -53,6 +153,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   onFinishWorkout,
   onOpenRirGuide,
   onUpdateDraft,
+  onUpdateExerciseNote,
 }) => {
   const currentWeekPlan = PROGRAM_WEEKS.find((w) => w.weekNumber === selectedWeek) || PROGRAM_WEEKS[0];
   const [selectedDayType, setSelectedDayType] = useState<'Full Body A' | 'Full Body B'>(() => {
@@ -77,6 +178,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [isDraftRestored, setIsDraftRestored] = useState<boolean>(false);
   const [hasWeightChanged, setHasWeightChanged] = useState<boolean>(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
   // Warmup pyramid modal state
   const [warmupModalExercise, setWarmupModalExercise] = useState<{
@@ -170,7 +272,10 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
       if (draftHasCompleted || draftHasWeightChanged) {
         const initialLogs: Record<string, LoggedExercise> = {};
         draft.exercises.forEach((ex) => {
-          initialLogs[ex.exerciseId] = ex;
+          initialLogs[ex.exerciseId] = {
+            ...ex,
+            notes: ex.notes ?? (profile.exerciseNotes?.[ex.exerciseId] || ''),
+          };
         });
         setExerciseLogs(initialLogs);
         if (draft.baseWorkingWeights) {
@@ -201,7 +306,14 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     activeTemplate.exercises.forEach((ex) => {
       const targetKey = `${selectedWeek}_${ex.id}`;
       const userTarget = profile.weeklyTargets[targetKey];
-      const smartTarget = generateSmartTarget(ex, selectedWeek, profile.completedWorkouts, profile.weightUnit);
+      const smartTarget = generateSmartTarget(
+        ex,
+        selectedWeek,
+        profile.completedWorkouts,
+        profile.weightUnit,
+        undefined,
+        profile.pastCycles
+      );
 
       const isDb = checkIsDumbbell(ex.name);
       const rawWeight = userTarget?.targetWeight || smartTarget.suggestedWeight;
@@ -222,9 +334,11 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
         intensityTechniqueApplied: ex.lastSetTechnique,
       }));
 
+      const persistentNote = profile.exerciseNotes?.[ex.id] || '';
       initialLogs[ex.id] = {
         exerciseId: ex.id,
         exerciseName: ex.name,
+        notes: persistentNote,
         sets: [...warmupSets, ...workingSets],
       };
     });
@@ -278,7 +392,14 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     activeTemplate.exercises.forEach((ex) => {
       const targetKey = `${selectedWeek}_${ex.id}`;
       const userTarget = profile.weeklyTargets[targetKey];
-      const smartTarget = generateSmartTarget(ex, selectedWeek, profile.completedWorkouts, profile.weightUnit);
+      const smartTarget = generateSmartTarget(
+        ex,
+        selectedWeek,
+        profile.completedWorkouts,
+        profile.weightUnit,
+        undefined,
+        profile.pastCycles
+      );
 
       const isDb = checkIsDumbbell(ex.name);
       const rawWeight = userTarget?.targetWeight || smartTarget.suggestedWeight;
@@ -299,9 +420,11 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
         intensityTechniqueApplied: ex.lastSetTechnique,
       }));
 
+      const persistentNote = profile.exerciseNotes?.[ex.id] || '';
       initialLogs[ex.id] = {
         exerciseId: ex.id,
         exerciseName: ex.name,
+        notes: persistentNote,
         sets: [...warmupSets, ...workingSets],
       };
     });
@@ -309,6 +432,18 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     setExerciseLogs(initialLogs);
     setBaseWorkingWeights(initialBaseWeights);
     setStartTime(Date.now());
+  };
+
+  const handleNoteChange = (exerciseId: string, note: string) => {
+    setExerciseLogs((prev) => {
+      const ex = prev[exerciseId];
+      if (!ex) return prev;
+      return {
+        ...prev,
+        [exerciseId]: { ...ex, notes: note },
+      };
+    });
+    onUpdateExerciseNote?.(exerciseId, note);
   };
 
   // Handle changing base working weight for an exercise
@@ -386,16 +521,18 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     }
   };
 
-  const handleSwapSubstitution = (exerciseId: string, newName: string) => {
+  const handleSwapSubstitution = (exercise: ExerciseDefinition, newName: string) => {
+    const isOriginal = newName === exercise.name;
+    const chosenSub = isOriginal ? undefined : newName;
     setExerciseLogs((prev) => {
-      const ex = prev[exerciseId];
+      const ex = prev[exercise.id];
       if (!ex) return prev;
       return {
         ...prev,
-        [exerciseId]: {
+        [exercise.id]: {
           ...ex,
           exerciseName: newName,
-          chosenSubstitution: newName,
+          chosenSubstitution: chosenSub,
         },
       };
     });
@@ -466,14 +603,14 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   const totalCount = activeTemplate.exercises.reduce((acc, ex) => acc + ex.workingSetsCount, 0);
 
   return (
-    <div className="space-y-5 pb-24 max-w-full overflow-hidden">
+    <div className="space-y-5 pb-36 sm:pb-24 max-w-full overflow-hidden">
       {/* Session Title & Day Switcher */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                Week {selectedWeek} • {currentWeekPlan.blockTitle}
+                Cycle {profile.currentCycle || 1} · Week {selectedWeek} • {currentWeekPlan.blockTitle}
               </span>
               {currentWeekPlan.isDeload && (
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -711,7 +848,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
                   <div className="pt-1">
                     <select
                       value={loggedEx.exerciseName}
-                      onChange={(e) => handleSwapSubstitution(exercise.id, e.target.value)}
+                      onChange={(e) => handleSwapSubstitution(exercise, e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-300 focus:outline-none cursor-pointer"
                     >
                       <option value={exercise.name}>Original: {exercise.name}</option>
@@ -719,6 +856,17 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
                       <option value={exercise.substitution2}>Sub 2: {exercise.substitution2}</option>
                     </select>
                   </div>
+
+                  {/* Smart Overload Target & Per-Exercise Persistent Note */}
+                  <ExerciseTargetAndNotes
+                    exercise={exercise}
+                    loggedEx={loggedEx}
+                    selectedWeek={selectedWeek}
+                    profile={profile}
+                    editingNoteId={editingNoteId}
+                    onSetEditingNoteId={setEditingNoteId}
+                    onNoteChange={handleNoteChange}
+                  />
                 </div>
 
                 {/* Form Cues if expanded */}
@@ -993,7 +1141,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
                   <div className="pt-0.5">
                     <select
                       value={loggedEx.exerciseName}
-                      onChange={(e) => handleSwapSubstitution(exercise.id, e.target.value)}
+                      onChange={(e) => handleSwapSubstitution(exercise, e.target.value)}
                       className="w-full px-2.5 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-300 focus:outline-none cursor-pointer"
                     >
                       <option value={exercise.name}>Original: {exercise.name}</option>
@@ -1001,6 +1149,17 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
                       <option value={exercise.substitution2}>Sub 2: {exercise.substitution2}</option>
                     </select>
                   </div>
+
+                  {/* Smart Overload Target & Per-Exercise Persistent Note */}
+                  <ExerciseTargetAndNotes
+                    exercise={exercise}
+                    loggedEx={loggedEx}
+                    selectedWeek={selectedWeek}
+                    profile={profile}
+                    editingNoteId={editingNoteId}
+                    onSetEditingNoteId={setEditingNoteId}
+                    onNoteChange={handleNoteChange}
+                  />
                 </div>
 
                 {/* Form cues if open */}
@@ -1203,6 +1362,30 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
                   </div>
                 </div>
 
+                {/* Substitution Dropdown */}
+                <div className="pt-0.5">
+                  <select
+                    value={loggedEx.exerciseName}
+                    onChange={(e) => handleSwapSubstitution(exercise, e.target.value)}
+                    className="w-full px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-xs text-zinc-300 focus:outline-none cursor-pointer"
+                  >
+                    <option value={exercise.name}>Original: {exercise.name}</option>
+                    <option value={exercise.substitution1}>Sub 1: {exercise.substitution1}</option>
+                    <option value={exercise.substitution2}>Sub 2: {exercise.substitution2}</option>
+                  </select>
+                </div>
+
+                {/* Smart Overload Target & Per-Exercise Persistent Note */}
+                <ExerciseTargetAndNotes
+                  exercise={exercise}
+                  loggedEx={loggedEx}
+                  selectedWeek={selectedWeek}
+                  profile={profile}
+                  editingNoteId={editingNoteId}
+                  onSetEditingNoteId={setEditingNoteId}
+                  onNoteChange={handleNoteChange}
+                />
+
                 <div className="overflow-x-auto -mx-1 px-1">
                   <table className="w-full text-left text-xs font-mono min-w-[280px]">
                     <thead>
@@ -1268,7 +1451,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
       )}
 
       {/* Sticky Bottom Bar on Mobile */}
-      <div className="fixed bottom-0 inset-x-0 z-30 bg-zinc-950/95 border-t border-zinc-800 p-3 sm:p-4 backdrop-blur-md shadow-2xl">
+      <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 inset-x-0 z-30 bg-zinc-950/95 border-t border-zinc-800 p-3 sm:p-4 backdrop-blur-md shadow-2xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div>
             <div className="font-bold text-white text-xs sm:text-sm">

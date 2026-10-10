@@ -136,7 +136,7 @@ export const RestTimer: React.FC<RestTimerProps> = ({
   const pct = Math.max(0, Math.min(100, ((initialSeconds - secondsLeft) / (initialSeconds || 1)) * 100));
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 max-w-sm w-full bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-4 text-zinc-100 backdrop-blur-md">
+    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-4 right-4 z-40 max-w-[calc(100vw-2rem)] sm:max-w-sm w-full bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-4 text-zinc-100 backdrop-blur-md">
       <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
         <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
           <Timer className={`w-4 h-4 ${isRunning ? 'animate-spin' : ''} text-emerald-400`} />

@@ -11,6 +11,8 @@ import {
   Award,
   Sparkles,
   Zap,
+  SkipForward,
+  RotateCcw,
 } from 'lucide-react';
 
 interface RoadmapViewProps {
@@ -19,6 +21,8 @@ interface RoadmapViewProps {
   onSelectWeek: (week: number) => void;
   onStartWorkout: (week: number, dayType: 'Full Body A' | 'Full Body B') => void;
   onOpenAdaptiveBonus: (week: number) => void;
+  onToggleSkipWeek?: (weekNumber: number) => void;
+  onStartNewCycle?: () => void;
 }
 
 export const RoadmapView: React.FC<RoadmapViewProps> = ({
@@ -27,6 +31,8 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
   onSelectWeek,
   onStartWorkout,
   onOpenAdaptiveBonus,
+  onToggleSkipWeek,
+  onStartNewCycle,
 }) => {
   // Compute overall program completion
   const totalRequiredWorkouts = 24; // 12 weeks * 2 anchor days
@@ -34,6 +40,15 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
     (w) => w.dayType === 'Full Body A' || w.dayType === 'Full Body B'
   ).length;
   const progressPct = Math.min(100, Math.round((completedAnchorCount / totalRequiredWorkouts) * 100));
+
+  // Check if all 12 weeks are complete or skipped
+  const isAll12WeeksComplete = Array.from({ length: 12 }, (_, i) => i + 1).every((w) => {
+    const sessions = profile.completedWorkouts.filter((s) => s.weekNumber === w);
+    const hasA = sessions.some((s) => s.dayType === 'Full Body A');
+    const hasB = sessions.some((s) => s.dayType === 'Full Body B');
+    const isSkipped = profile.skippedWeeks?.includes(w);
+    return (hasA && hasB) || isSkipped;
+  });
 
   // Blocks
   const blocks = [
@@ -65,9 +80,9 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                12-Week Science Program
+                Cycle {profile.currentCycle || 1} • 12-Week Science Program
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-300">
                 2x/Week Core Anchor + Adaptive Bonus
@@ -109,6 +124,34 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
         </div>
       </div>
 
+      {/* Cycle Completion Banner & Start New Cycle */}
+      {isAll12WeeksComplete && (
+        <div className="bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/10 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center sm:text-left">
+            <div className="flex items-center gap-2 justify-center sm:justify-start">
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+              <span className="font-mono text-xs uppercase tracking-wider font-bold text-emerald-400">
+                Cycle {profile.currentCycle || 1} Complete!
+              </span>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-white">
+              Ready for Cycle {(profile.currentCycle || 1) + 1}?
+            </h3>
+            <p className="text-xs sm:text-sm text-zinc-300 max-w-xl">
+              All 12 weeks are finished! Archiving your history and starting a new cycle will reset the week progress to Week 1 while keeping your XP, badges, and using your Cycle {profile.currentCycle || 1} final working weights as your new overload baselines.
+            </p>
+          </div>
+
+          <button
+            onClick={onStartNewCycle}
+            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-black text-sm shadow-xl transition active:scale-95 shrink-0 flex items-center gap-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Start New Cycle (Cycle {(profile.currentCycle || 1) + 1})</span>
+          </button>
+        </div>
+      )}
+
       {/* 3 Blocks Display */}
       <div className="space-y-8">
         {blocks.map((block) => (
@@ -134,6 +177,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                 const hasA = completedSessions.some((w) => w.dayType === 'Full Body A');
                 const hasB = completedSessions.some((w) => w.dayType === 'Full Body B');
                 const isFullyComplete = hasA && hasB;
+                const isSkipped = Boolean(profile.skippedWeeks?.includes(week.weekNumber));
                 const bonusCount = profile.bonusSessions.filter(
                   (b) => b.weekNumber === week.weekNumber
                 ).length;
@@ -147,6 +191,8 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                         ? 'bg-zinc-900 border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/50'
                         : isFullyComplete
                         ? 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
+                        : isSkipped
+                        ? 'bg-zinc-950/80 border-zinc-800/60 opacity-80'
                         : 'bg-zinc-950 border-zinc-800/80 hover:border-zinc-700'
                     }`}
                   >
@@ -156,7 +202,11 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                         <span className="font-mono text-sm font-black text-white">
                           Week {week.weekNumber}
                         </span>
-                        {week.isDeload ? (
+                        {isSkipped ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700 flex items-center gap-1">
+                            <SkipForward className="w-3 h-3 text-zinc-400" /> Skipped
+                          </span>
+                        ) : week.isDeload ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
                             Deload
                           </span>
@@ -220,16 +270,44 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                     </div>
 
                     {/* Bottom Action */}
-                    <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenAdaptiveBonus(week.weekNumber);
-                        }}
-                        className="text-teal-400 hover:text-teal-300 text-[11px] font-semibold flex items-center gap-1 transition"
-                      >
-                        <span>+ Squeeze Extra</span>
-                      </button>
+                    <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenAdaptiveBonus(week.weekNumber);
+                          }}
+                          className="text-teal-400 hover:text-teal-300 text-[11px] font-semibold flex items-center gap-1 transition"
+                        >
+                          <span>+ Squeeze Extra</span>
+                        </button>
+
+                        {/* Skip / Un-skip Week action button */}
+                        {isSkipped ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleSkipWeek?.(week.weekNumber);
+                            }}
+                            className="text-amber-400 hover:text-amber-300 text-[11px] font-semibold transition flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Un-skip</span>
+                          </button>
+                        ) : week.weekNumber === profile.currentWeek && !isFullyComplete ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleSkipWeek?.(week.weekNumber);
+                            }}
+                            className="text-zinc-400 hover:text-amber-400 text-[11px] font-semibold transition flex items-center gap-1"
+                            title="Skip this week to advance program"
+                          >
+                            <SkipForward className="w-3 h-3" />
+                            <span>Skip week</span>
+                          </button>
+                        ) : null}
+                      </div>
 
                       <span className="text-zinc-500 flex items-center gap-0.5 group-hover:text-zinc-300">
                         <span>Details</span>

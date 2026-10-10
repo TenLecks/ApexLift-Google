@@ -5,6 +5,7 @@ import {
   BonusSessionLog,
   WeeklyExerciseTarget,
   Badge,
+  PastCycle,
 } from './types/workout';
 import {
   loadUserProfile,
@@ -231,6 +232,84 @@ export default function App() {
     setCurrentTab('workout');
   };
 
+  const handleUpdateExerciseNote = (exerciseId: string, note: string) => {
+    setProfile((prev) => {
+      const updatedNotes = {
+        ...(prev.exerciseNotes || {}),
+        [exerciseId]: note,
+      };
+      const updated: UserFitnessProfile = {
+        ...prev,
+        exerciseNotes: updatedNotes,
+      };
+      saveUserProfile(updated);
+      return updated;
+    });
+  };
+
+  const handleToggleSkipWeek = (weekNumber: number) => {
+    const currentSkipped = profile.skippedWeeks || [];
+    const isAlreadySkipped = currentSkipped.includes(weekNumber);
+    const nextSkipped = isAlreadySkipped
+      ? currentSkipped.filter((w) => w !== weekNumber)
+      : [...currentSkipped, weekNumber];
+
+    const updatedProfile: UserFitnessProfile = {
+      ...profile,
+      skippedWeeks: nextSkipped,
+    };
+    const { profile: evaluated } = updateStreakAndBadges(updatedProfile);
+    setProfile(evaluated);
+    setSelectedWeek(evaluated.currentWeek);
+  };
+
+  const handleStartNewCycle = () => {
+    const currentCycleNum = profile.currentCycle || 1;
+    if (
+      !window.confirm(
+        `Start Cycle ${currentCycleNum + 1}? Your current 12-week workout logs will be archived into Cycle History. Your badges and XP will be preserved, and your final weights from this cycle will be used as baseline targets for Cycle ${currentCycleNum + 1}!`
+      )
+    ) {
+      return;
+    }
+
+    const allDates = [
+      ...profile.completedWorkouts.map((w) => new Date(w.dateCompleted).getTime()),
+      ...profile.bonusSessions.map((b) => new Date(b.date).getTime()),
+    ].filter((t) => !isNaN(t));
+
+    const startDate =
+      allDates.length > 0 ? new Date(Math.min(...allDates)).toISOString() : new Date().toISOString();
+    const endDate = new Date().toISOString();
+
+    const newPastCycle: PastCycle = {
+      cycleNumber: currentCycleNum,
+      startDate,
+      endDate,
+      completedWorkouts: profile.completedWorkouts,
+      bonusSessions: profile.bonusSessions,
+    };
+
+    const updatedPastCycles = [...(profile.pastCycles || []), newPastCycle];
+
+    const resetProfile: UserFitnessProfile = {
+      ...profile,
+      currentCycle: currentCycleNum + 1,
+      pastCycles: updatedPastCycles,
+      currentWeek: 1,
+      completedWorkouts: [],
+      bonusSessions: [],
+      weeklyTargets: {},
+      activeWorkoutDraft: null,
+      skippedWeeks: [],
+    };
+
+    const { profile: evaluated } = updateStreakAndBadges(resetProfile);
+    setProfile(evaluated);
+    setSelectedWeek(1);
+    saveUserProfile(evaluated);
+  };
+
   const handleOpenBonusFromRoadmap = (week: number) => {
     setAdaptiveBonusWeek(week);
     setIsAdaptiveBonusOpen(true);
@@ -254,10 +333,11 @@ export default function App() {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onLoadDemoData={handleLoadDemoData}
         onResetData={handleResetData}
+        onToggleSkipWeek={handleToggleSkipWeek}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 sm:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:py-8">
         {currentTab === 'roadmap' && (
           <RoadmapView
             profile={profile}
@@ -265,6 +345,8 @@ export default function App() {
             onSelectWeek={handleSelectWeek}
             onStartWorkout={handleStartWorkout}
             onOpenAdaptiveBonus={handleOpenBonusFromRoadmap}
+            onToggleSkipWeek={handleToggleSkipWeek}
+            onStartNewCycle={handleStartNewCycle}
           />
         )}
 
@@ -275,6 +357,7 @@ export default function App() {
             onFinishWorkout={handleFinishWorkout}
             onOpenRirGuide={() => setIsRirGuideOpen(true)}
             onUpdateDraft={handleUpdateDraft}
+            onUpdateExerciseNote={handleUpdateExerciseNote}
           />
         )}
 

@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { UserFitnessProfile, MuscleGroup } from '../types/workout';
+import React, { useState, useMemo } from 'react';
+import { UserFitnessProfile, MuscleGroup, LoggedExercise } from '../types/workout';
 import {
   calculate1RM,
   calculateWeeklyMuscleVolume,
   formatWeight,
   MUSCLE_VOLUME_TARGETS,
 } from '../utils/progression';
+import { PROGRAM_WEEKS } from '../data/programData';
 import {
   TrendingUp,
   BarChart3,
@@ -22,22 +23,103 @@ interface ProgressVisualizationViewProps {
   selectedWeek: number;
 }
 
+interface SelectableLift {
+  key: string;
+  exerciseId: string;
+  chosenSubstitution?: string;
+  label: string;
+}
+
 export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps> = ({
   profile,
   selectedWeek,
 }) => {
-  const [selectedExerciseName, setSelectedExerciseName] = useState<string>('Flat DB Press');
+  // Collect all unique (exerciseId, chosenSubstitution) combinations
+  const selectableLifts = useMemo(() => {
+    const list: SelectableLift[] = [];
+    const seen = new Set<string>();
 
-  // Key tracked exercises for 1RM
-  const compoundLifts = [
-    'Flat DB Press',
-    'Hack Squat',
-    'Romanian Deadlift',
-    'Lat Pulldown',
-    'T-Bar Row',
-    'Incline DB Press',
-    'Leg Press',
-  ];
+    PROGRAM_WEEKS.forEach((week) => {
+      const allDefs = [...week.workouts.dayA.exercises, ...week.workouts.dayB.exercises];
+      allDefs.forEach((def) => {
+        // Base exercise
+        const baseKey = `${def.id}::`;
+        if (!seen.has(baseKey)) {
+          seen.add(baseKey);
+          list.push({
+            key: baseKey,
+            exerciseId: def.id,
+            chosenSubstitution: undefined,
+            label: def.name,
+          });
+        }
+
+        // Substitution 1
+        if (def.substitution1) {
+          const sub1Key = `${def.id}::${def.substitution1}`;
+          if (!seen.has(sub1Key)) {
+            seen.add(sub1Key);
+            list.push({
+              key: sub1Key,
+              exerciseId: def.id,
+              chosenSubstitution: def.substitution1,
+              label: `${def.substitution1} (Sub for ${def.name})`,
+            });
+          }
+        }
+
+        // Substitution 2
+        if (def.substitution2) {
+          const sub2Key = `${def.id}::${def.substitution2}`;
+          if (!seen.has(sub2Key)) {
+            seen.add(sub2Key);
+            list.push({
+              key: sub2Key,
+              exerciseId: def.id,
+              chosenSubstitution: def.substitution2,
+              label: `${def.substitution2} (Sub for ${def.name})`,
+            });
+          }
+        }
+      });
+    });
+
+    // Also include any custom substitutions logged in history
+    profile.completedWorkouts.forEach((w) => {
+      w.exercises.forEach((ex) => {
+        if (ex.chosenSubstitution) {
+          const subKey = `${ex.exerciseId}::${ex.chosenSubstitution}`;
+          if (!seen.has(subKey)) {
+            seen.add(subKey);
+            list.push({
+              key: subKey,
+              exerciseId: ex.exerciseId,
+              chosenSubstitution: ex.chosenSubstitution,
+              label: `${ex.chosenSubstitution} (Logged Sub)`,
+            });
+          }
+        }
+      });
+    });
+
+    return list;
+  }, [profile.completedWorkouts]);
+
+  const [selectedLiftKey, setSelectedLiftKey] = useState<string>(
+    () => selectableLifts[0]?.key || 'b1-a1::'
+  );
+
+  const currentLift =
+    selectableLifts.find((l) => l.key === selectedLiftKey) || selectableLifts[0];
+  const targetExerciseId = currentLift?.exerciseId;
+  const targetSubstitution = currentLift?.chosenSubstitution;
+
+  const isMatchingExercise = (ex: LoggedExercise) => {
+    if (ex.exerciseId !== targetExerciseId) return false;
+    const loggedSub = ex.chosenSubstitution ? ex.chosenSubstitution.trim() : undefined;
+    const targetSub = targetSubstitution ? targetSubstitution.trim() : undefined;
+    return loggedSub === targetSub;
+  };
 
   // Compute 1RM points across all 12 weeks for selected exercise
   const oneRmHistory: { week: number; best1RM: number; weight: number; reps: number; date: string }[] = [];
@@ -51,7 +133,7 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
 
     sessions.forEach((s) => {
       s.exercises.forEach((ex) => {
-        if (ex.exerciseName.toLowerCase().includes(selectedExerciseName.toLowerCase())) {
+        if (isMatchingExercise(ex)) {
           ex.sets.forEach((set) => {
             if (!set.isWarmup && set.completed && set.weight > 0 && set.reps > 0) {
               const est = calculate1RM(set.weight, set.reps);
@@ -70,7 +152,7 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
     const bonus = profile.bonusSessions.filter((b) => b.weekNumber === w);
     bonus.forEach((b) => {
       b.exercisesLogged?.forEach((ex) => {
-        if (ex.exerciseName.toLowerCase().includes(selectedExerciseName.toLowerCase())) {
+        if (isMatchingExercise(ex)) {
           ex.sets.forEach((set) => {
             if (!set.isWarmup && set.completed && set.weight > 0 && set.reps > 0) {
               const est = calculate1RM(set.weight, set.reps);
@@ -167,13 +249,13 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
           <div className="flex items-center gap-2">
             <span className="text-xs text-zinc-400 font-semibold">Lift:</span>
             <select
-              value={selectedExerciseName}
-              onChange={(e) => setSelectedExerciseName(e.target.value)}
-              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs font-bold text-sky-300 focus:outline-none cursor-pointer"
+              value={selectedLiftKey}
+              onChange={(e) => setSelectedLiftKey(e.target.value)}
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs font-bold text-sky-300 focus:outline-none cursor-pointer max-w-xs truncate"
             >
-              {compoundLifts.map((lift) => (
-                <option key={lift} value={lift}>
-                  {lift}
+              {selectableLifts.map((lift) => (
+                <option key={lift.key} value={lift.key}>
+                  {lift.label}
                 </option>
               ))}
             </select>
@@ -255,7 +337,7 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
           ) : (
             <div className="py-12 text-center text-zinc-500 space-y-2">
               <Info className="w-8 h-8 mx-auto text-zinc-600" />
-              <p className="text-sm font-medium">No sets logged yet for "{selectedExerciseName}".</p>
+              <p className="text-sm font-medium">No sets logged yet for "{currentLift?.label || 'selected lift'}".</p>
               <p className="text-xs text-zinc-500">
                 Log a workout in the Workout Logger or click "Load Demo" in the top bar to preview sample curves.
               </p>

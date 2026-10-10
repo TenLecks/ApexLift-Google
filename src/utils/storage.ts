@@ -9,6 +9,8 @@ export function getDefaultProfile(): UserFitnessProfile {
     name: 'Athlete',
     weightUnit: 'kg',
     currentWeek: 1,
+    currentCycle: 1,
+    pastCycles: [],
     streakWeeks: 0,
     bestStreakWeeks: 0,
     totalXp: 120,
@@ -18,6 +20,8 @@ export function getDefaultProfile(): UserFitnessProfile {
     weeklyTargets: {},
     badges: { ...INITIAL_BADGES },
     activeWorkoutDraft: null,
+    exerciseNotes: {},
+    skippedWeeks: [],
   };
 }
 
@@ -38,6 +42,10 @@ export function loadUserProfile(): UserFitnessProfile {
       });
     }
     parsed.badges = mergedBadges;
+    if (!parsed.currentCycle) parsed.currentCycle = 1;
+    if (!parsed.pastCycles) parsed.pastCycles = [];
+    if (!parsed.exerciseNotes) parsed.exerciseNotes = {};
+    if (!parsed.skippedWeeks) parsed.skippedWeeks = [];
     // Evaluate streak & currentWeek on load so existing users get correct currentWeek immediately
     const evaluated = updateStreakAndBadges(parsed).profile;
     return evaluated;
@@ -74,13 +82,14 @@ export function updateStreakAndBadges(profile: UserFitnessProfile): {
     weekMap.get(w.weekNumber)!.add(w.dayType);
   });
 
-  // 1. Compute currentWeek = the first week 1..12 where Full Body A and Full Body B are NOT both completed; if all 12 are complete, use 12.
+  // 1. Compute currentWeek = the first week 1..12 where Full Body A and Full Body B are NOT both completed AND week is not skipped; if all 12 are complete or skipped, use 12.
   let computedCurrentWeek = 12;
   for (let w = 1; w <= 12; w++) {
     const days = weekMap.get(w);
     const hasA = days?.has('Full Body A');
     const hasB = days?.has('Full Body B');
-    if (!hasA || !hasB) {
+    const isSkipped = updated.skippedWeeks?.includes(w);
+    if ((!hasA || !hasB) && !isSkipped) {
       computedCurrentWeek = w;
       break;
     }
@@ -88,17 +97,23 @@ export function updateStreakAndBadges(profile: UserFitnessProfile): {
   updated.currentWeek = computedCurrentWeek;
 
   // 2. Rewrite the streak calc to be truly consecutive:
-  // Iterate weeks 1..(currentWeek-1)... streak = number of consecutive fully-completed weeks ending at the most recent fully-completed week before the current week, resetting to 0 on any incomplete past week.
-  // (A week that is still in progress — the current week — must not break the streak.)
+  // Iterate weeks 1..(currentWeek-1)... streak = number of consecutive fully-completed weeks ending at the most recent fully-completed week before the current week, resetting to 0 on any incomplete or skipped past week.
+  // (A skipped week resets the streak and does not count toward the streak.)
   let currentStreak = 0;
-  const isWeek12FullyComplete = weekMap.get(12)?.has('Full Body A') && weekMap.get(12)?.has('Full Body B');
+  const isWeek12FullyComplete =
+    (weekMap.get(12)?.has('Full Body A') && weekMap.get(12)?.has('Full Body B')) ||
+    Boolean(updated.skippedWeeks?.includes(12));
   const lastWeekToCheck = (computedCurrentWeek === 12 && isWeek12FullyComplete) ? 12 : computedCurrentWeek - 1;
 
   for (let w = 1; w <= lastWeekToCheck; w++) {
     const days = weekMap.get(w);
     const hasA = days?.has('Full Body A');
     const hasB = days?.has('Full Body B');
-    if (hasA && hasB) {
+    const isSkipped = updated.skippedWeeks?.includes(w);
+
+    if (isSkipped) {
+      currentStreak = 0;
+    } else if (hasA && hasB) {
       currentStreak++;
     } else {
       currentStreak = 0;

@@ -4,6 +4,8 @@ import {
   ExerciseDefinition,
   MuscleGroup,
   WeightUnit,
+  PastCycle,
+  LoggedExercise,
 } from '../types/workout';
 import { PROGRAM_WEEKS } from '../data/programData';
 
@@ -143,30 +145,70 @@ export interface TargetSuggestion {
   reason: string;
   previousBestWeight?: number;
   previousBestReps?: number;
+  previousSessionDate?: string;
 }
 
 export function generateSmartTarget(
   exercise: ExerciseDefinition,
   weekNumber: number,
   allWorkouts: CompletedWorkoutSession[],
-  unit: WeightUnit
+  unit: WeightUnit,
+  chosenSubstitution?: string,
+  pastCycles?: PastCycle[]
 ): TargetSuggestion {
-  // Find the most recent session containing this exercise or same primary movement
+  const isMatchingSubstitution = (e: LoggedExercise) => {
+    if (e.exerciseId !== exercise.id) return false;
+    const loggedSub = e.chosenSubstitution ? e.chosenSubstitution.trim() : undefined;
+    const targetSub = chosenSubstitution ? chosenSubstitution.trim() : undefined;
+    return loggedSub === targetSub;
+  };
+
+  // 1. Find the most recent session containing this exercise with the SAME substitution in current cycle
   let lastLoggedSets: { weight: number; reps: number; rpe: number; rir: number }[] = [];
+  let previousDate: string | undefined = undefined;
 
   for (let w = weekNumber - 1; w >= 1; w--) {
     const session = allWorkouts.find(
-      (s) => s.weekNumber === w && s.exercises.some((e) => e.exerciseId === exercise.id)
+      (s) => s.weekNumber === w && s.exercises.some(isMatchingSubstitution)
     );
     if (session) {
-      const match = session.exercises.find((e) => e.exerciseId === exercise.id);
+      const match = session.exercises.find(isMatchingSubstitution);
       if (match && match.sets.length > 0) {
         const completedWorkingSets = match.sets.filter((s) => !s.isWarmup && s.completed && s.weight > 0);
         if (completedWorkingSets.length > 0) {
           lastLoggedSets = completedWorkingSets;
+          previousDate = session.dateCompleted;
           break;
         }
       }
+    }
+  }
+
+  // 2. If no sets in current cycle, search past cycles in reverse chronological order
+  let isFromPastCycle = false;
+  let pastCycleNum = 1;
+  if (lastLoggedSets.length === 0 && pastCycles && pastCycles.length > 0) {
+    for (let cIdx = pastCycles.length - 1; cIdx >= 0; cIdx--) {
+      const cycle = pastCycles[cIdx];
+      for (let w = 12; w >= 1; w--) {
+        const session = cycle.completedWorkouts.find(
+          (s) => s.weekNumber === w && s.exercises.some(isMatchingSubstitution)
+        );
+        if (session) {
+          const match = session.exercises.find(isMatchingSubstitution);
+          if (match && match.sets.length > 0) {
+            const completedWorkingSets = match.sets.filter((s) => !s.isWarmup && s.completed && s.weight > 0);
+            if (completedWorkingSets.length > 0) {
+              lastLoggedSets = completedWorkingSets;
+              previousDate = session.dateCompleted;
+              isFromPastCycle = true;
+              pastCycleNum = cycle.cycleNumber;
+              break;
+            }
+          }
+        }
+      }
+      if (lastLoggedSets.length > 0) break;
     }
   }
 
@@ -180,7 +222,7 @@ export function generateSmartTarget(
       suggestedRepsMin: exercise.minReps,
       suggestedRepsMax: exercise.maxReps,
       targetRpe: defaultRpe,
-      reason: 'Initial baseline for Week 1. Log warmups to calibrate your true working weight.',
+      reason: 'First time — calibrate today with warmups to find your true working weight.',
     };
   }
 
@@ -190,6 +232,19 @@ export function generateSmartTarget(
   );
 
   const increment = unit === 'kg' ? (exercise.isHeavyOrBackoff === 'heavy' ? 2.5 : 1.25) : (exercise.isHeavyOrBackoff === 'heavy' ? 5 : 2.5);
+
+  if (isFromPastCycle) {
+    return {
+      suggestedWeight: bestSet.weight,
+      suggestedRepsMin: exercise.minReps,
+      suggestedRepsMax: exercise.maxReps,
+      targetRpe: defaultRpe,
+      previousBestWeight: bestSet.weight,
+      previousBestReps: bestSet.reps,
+      previousSessionDate: previousDate,
+      reason: `Cycle ${pastCycleNum} final weight (${bestSet.weight}${unit} × ${bestSet.reps}). Starting Cycle baseline!`,
+    };
+  }
 
   // Double progression logic:
   // If top of rep range was hit: increase weight!
@@ -201,6 +256,7 @@ export function generateSmartTarget(
       targetRpe: defaultRpe,
       previousBestWeight: bestSet.weight,
       previousBestReps: bestSet.reps,
+      previousSessionDate: previousDate,
       reason: `Hit top of rep range (${bestSet.reps} reps @ ${bestSet.weight}${unit}). Overload with +${increment}${unit}!`,
     };
   }
@@ -213,6 +269,7 @@ export function generateSmartTarget(
     targetRpe: defaultRpe,
     previousBestWeight: bestSet.weight,
     previousBestReps: bestSet.reps,
+    previousSessionDate: previousDate,
     reason: `Maintain ${bestSet.weight}${unit} and aim for ${bestSet.reps + 1} reps (Beat the Logbook).`,
   };
 }
