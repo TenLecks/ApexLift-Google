@@ -1,0 +1,22 @@
+# Tells TenLecks/apexlift to build and publish an APK update right after every push here
+# (instead of waiting for its 10-minute schedule, which still runs as a fallback).
+# Needs repo secret APEXLIFT_DISPATCH_TOKEN: a fine-grained token with Actions: read & write on TenLecks/apexlift.
+name: Trigger APK update
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.APEXLIFT_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "APEXLIFT_DISPATCH_TOKEN not set; the 10-minute schedule in TenLecks/apexlift will pick this up."
+            exit 0
+          fi
+          gh workflow run publish-update.yml -R TenLecks/apexlift
