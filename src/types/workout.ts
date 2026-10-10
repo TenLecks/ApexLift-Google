@@ -151,6 +151,7 @@ export interface UserFitnessProfile {
     dayType: 'Full Body A' | 'Full Body B';
     startedAt: string;
     exercises: LoggedExercise[];
+    baseWorkingWeights?: Record<string, number>;
   } | null;
 }
 

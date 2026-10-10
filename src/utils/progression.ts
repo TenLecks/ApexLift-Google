@@ -5,6 +5,18 @@ import {
   MuscleGroup,
   WeightUnit,
 } from '../types/workout';
+import { PROGRAM_WEEKS } from '../data/programData';
+
+// Map of all known exercise IDs to their target muscles
+const EXERCISE_ID_TO_MUSCLES_MAP = new Map<string, MuscleGroup[]>();
+PROGRAM_WEEKS.forEach((w) => {
+  w.workouts.dayA.exercises.forEach((ex) => {
+    EXERCISE_ID_TO_MUSCLES_MAP.set(ex.id, ex.targetMuscles);
+  });
+  w.workouts.dayB.exercises.forEach((ex) => {
+    EXERCISE_ID_TO_MUSCLES_MAP.set(ex.id, ex.targetMuscles);
+  });
+});
 
 // Epley Formula for 1RM estimate
 export function calculate1RM(weight: number, reps: number): number {
@@ -265,10 +277,12 @@ export function calculateWeeklyMuscleVolume(
     session.exercises.forEach((ex) => {
       const workingSets = ex.sets.filter((s) => !s.isWarmup && s.completed).length;
       if (workingSets > 0) {
-        // Map exercise target muscles
-        const targetMuscles = getExerciseMusclesByName(ex.exerciseName);
+        // Map exercise target muscles using exerciseId first, with fallback to getExerciseMusclesByName
+        const targetMuscles = EXERCISE_ID_TO_MUSCLES_MAP.get(ex.exerciseId) || getExerciseMusclesByName(ex.exerciseName);
         targetMuscles.forEach((muscle) => {
-          muscleCounts[muscle] = (muscleCounts[muscle] || 0) + workingSets;
+          if (muscle in muscleCounts) {
+            muscleCounts[muscle] = (muscleCounts[muscle] || 0) + workingSets;
+          }
         });
       }
     });
@@ -316,16 +330,16 @@ function getExerciseMusclesByName(name: string): MuscleGroup[] {
   if (n.includes('squat') || n.includes('lunge') || n.includes('step up')) {
     return ['Quads', 'Glutes'];
   }
-  if (n.includes('deadlift') || n.includes('rdl') || n.includes('hamstring') || n.includes('curl') && n.includes('leg')) {
+  if (n.includes('deadlift') || n.includes('rdl') || n.includes('hamstring') || n.includes('nordic') || (n.includes('curl') && n.includes('leg'))) {
     return ['Hamstrings', 'Glutes'];
   }
-  if (n.includes('pulldown') || n.includes('pull-up') || n.includes('row')) {
+  if (n.includes('pulldown') || n.includes('pull-up') || n.includes('pullup') || n.includes('row') || n.includes('pullover')) {
     return ['Back / Lats', 'Biceps'];
   }
   if (n.includes('lateral raise') || n.includes('arnold press') || n.includes('shoulder')) {
     return ['Shoulders / Delts'];
   }
-  if (n.includes('bicep') || (n.includes('curl') && !n.includes('leg'))) {
+  if (n.includes('bicep') || (n.includes('curl') && !n.includes('leg') && !n.includes('wrist') && !n.includes('nordic'))) {
     return ['Biceps'];
   }
   if (n.includes('tricep') || n.includes('skull crusher')) {
@@ -337,5 +351,8 @@ function getExerciseMusclesByName(name: string): MuscleGroup[] {
   if (n.includes('crunch') || n.includes('leg raise') || n.includes('core')) {
     return ['Abs / Core'];
   }
-  return ['Chest'];
+  if (n.includes('wrist') || n.includes('forearm') || n.includes('dead hang')) {
+    return ['Forearms'];
+  }
+  return [];
 }

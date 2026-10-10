@@ -42,6 +42,7 @@ interface WorkoutViewProps {
   selectedWeek: number;
   onFinishWorkout: (session: CompletedWorkoutSession) => void;
   onOpenRirGuide: () => void;
+  onUpdateDraft?: (draft: UserFitnessProfile['activeWorkoutDraft']) => void;
 }
 
 export type MobileLayoutMode = 'stepper' | 'focus' | 'table';
@@ -51,9 +52,15 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   selectedWeek,
   onFinishWorkout,
   onOpenRirGuide,
+  onUpdateDraft,
 }) => {
   const currentWeekPlan = PROGRAM_WEEKS.find((w) => w.weekNumber === selectedWeek) || PROGRAM_WEEKS[0];
-  const [selectedDayType, setSelectedDayType] = useState<'Full Body A' | 'Full Body B'>('Full Body A');
+  const [selectedDayType, setSelectedDayType] = useState<'Full Body A' | 'Full Body B'>(() => {
+    if (profile.activeWorkoutDraft && profile.activeWorkoutDraft.weekNumber === selectedWeek) {
+      return profile.activeWorkoutDraft.dayType;
+    }
+    return 'Full Body A';
+  });
 
   const activeTemplate: DayWorkoutTemplate =
     selectedDayType === 'Full Body A' ? currentWeekPlan.workouts.dayA : currentWeekPlan.workouts.dayB;
@@ -68,6 +75,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   const [baseWorkingWeights, setBaseWorkingWeights] = useState<Record<string, number>>({});
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [isDraftRestored, setIsDraftRestored] = useState<boolean>(false);
 
   // Warmup pyramid modal state
   const [warmupModalExercise, setWarmupModalExercise] = useState<{
@@ -80,6 +88,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   const [restTimerSeconds, setRestTimerSeconds] = useState<number>(120);
   const [isRestTimerActive, setIsRestTimerActive] = useState<boolean>(false);
   const [restExerciseName, setRestExerciseName] = useState<string>('');
+  const [timerStartKey, setTimerStartKey] = useState<number>(0);
 
   // Check if this workout is already completed in history
   const existingCompletedSession = profile.completedWorkouts.find(
@@ -133,6 +142,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
 
   // Initialize exercise logs & auto-calculate working + warm-up weights
   useEffect(() => {
+    // 1. If this exact session was already completed, load its read-only history
     if (existingCompletedSession) {
       const initialLogs: Record<string, LoggedExercise> = {};
       const initialBaseWeights: Record<string, number> = {};
@@ -145,9 +155,37 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
       });
       setExerciseLogs(initialLogs);
       setBaseWorkingWeights(initialBaseWeights);
+      setIsDraftRestored(false);
       return;
     }
 
+    // 2. If an active workout draft exists for this week + dayType, restore it!
+    const draft = profile.activeWorkoutDraft;
+    if (draft && draft.weekNumber === selectedWeek && draft.dayType === selectedDayType) {
+      const initialLogs: Record<string, LoggedExercise> = {};
+      draft.exercises.forEach((ex) => {
+        initialLogs[ex.exerciseId] = ex;
+      });
+      setExerciseLogs(initialLogs);
+      if (draft.baseWorkingWeights) {
+        setBaseWorkingWeights(draft.baseWorkingWeights);
+      } else {
+        const initialBaseWeights: Record<string, number> = {};
+        draft.exercises.forEach((ex) => {
+          const firstWorking = ex.sets.find((s) => !s.isWarmup && s.weight > 0);
+          if (firstWorking) initialBaseWeights[ex.exerciseId] = firstWorking.weight;
+        });
+        setBaseWorkingWeights(initialBaseWeights);
+      }
+      if (draft.startedAt) {
+        setStartTime(new Date(draft.startedAt).getTime() || Date.now());
+      }
+      setIsDraftRestored(true);
+      return;
+    }
+
+    // 3. Otherwise generate fresh targets
+    setIsDraftRestored(false);
     const initialLogs: Record<string, LoggedExercise> = {};
     const initialBaseWeights: Record<string, number> = {};
 
@@ -186,7 +224,64 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     setBaseWorkingWeights(initialBaseWeights);
     setStartTime(Date.now());
     setFocusExerciseIndex(0);
-  }, [selectedWeek, selectedDayType, existingCompletedSession]);
+  }, [selectedWeek, selectedDayType, existingCompletedSession, profile.weightUnit]);
+
+  // Persist in-progress workout draft to profile whenever changes occur
+  useEffect(() => {
+    if (existingCompletedSession) return;
+    if (Object.keys(exerciseLogs).length === 0) return;
+
+    onUpdateDraft?.({
+      weekNumber: selectedWeek,
+      dayType: selectedDayType,
+      startedAt: new Date(startTime).toISOString(),
+      exercises: Object.values(exerciseLogs),
+      baseWorkingWeights,
+    });
+  }, [exerciseLogs, baseWorkingWeights, selectedWeek, selectedDayType, startTime, existingCompletedSession]);
+
+  const handleDiscardDraft = () => {
+    onUpdateDraft?.(null);
+    setIsDraftRestored(false);
+
+    const initialLogs: Record<string, LoggedExercise> = {};
+    const initialBaseWeights: Record<string, number> = {};
+
+    activeTemplate.exercises.forEach((ex) => {
+      const targetKey = `${selectedWeek}_${ex.id}`;
+      const userTarget = profile.weeklyTargets[targetKey];
+      const smartTarget = generateSmartTarget(ex, selectedWeek, profile.completedWorkouts, profile.weightUnit);
+
+      const isDb = checkIsDumbbell(ex.name);
+      const rawWeight = userTarget?.targetWeight || smartTarget.suggestedWeight;
+      const workingWeight = roundGymWeight(rawWeight, isDb);
+      initialBaseWeights[ex.id] = workingWeight;
+
+      const warmupSets = computeWarmupSetsForWeight(ex, workingWeight);
+
+      const workingSets: LoggedSet[] = Array.from({ length: ex.workingSetsCount }, (_, idx) => ({
+        id: `${ex.id}-s${idx + 1}`,
+        setNumber: idx + 1,
+        isWarmup: false,
+        weight: workingWeight,
+        reps: userTarget?.targetRepsMin || smartTarget.suggestedRepsMin,
+        rpe: userTarget?.targetRpe || smartTarget.targetRpe,
+        rir: ex.targetRir.includes('0') ? 0 : 1,
+        completed: false,
+        intensityTechniqueApplied: ex.lastSetTechnique,
+      }));
+
+      initialLogs[ex.id] = {
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        sets: [...warmupSets, ...workingSets],
+      };
+    });
+
+    setExerciseLogs(initialLogs);
+    setBaseWorkingWeights(initialBaseWeights);
+    setStartTime(Date.now());
+  };
 
   // Handle changing base working weight for an exercise
   const handleBaseWeightChange = (exercise: ExerciseDefinition, newWeight: number) => {
@@ -217,10 +312,40 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   };
 
   const handleUpdateSet = (exerciseId: string, setId: string, updates: Partial<LoggedSet>) => {
+    const currentEx = exerciseLogs[exerciseId];
+    const targetSet = currentEx?.sets.find((s) => s.id === setId);
+    const isUpdatingWeight =
+      updates.weight !== undefined && targetSet && updates.weight !== targetSet.weight;
+
+    let newWarmups: LoggedSet[] | null = null;
+    if (isUpdatingWeight && targetSet && !targetSet.isWarmup) {
+      const exerciseDef = activeTemplate.exercises.find((e) => e.id === exerciseId);
+      if (exerciseDef) {
+        newWarmups = computeWarmupSetsForWeight(exerciseDef, updates.weight!);
+      }
+      setBaseWorkingWeights((bw) => ({ ...bw, [exerciseId]: updates.weight! }));
+    }
+
     setExerciseLogs((prev) => {
       const ex = prev[exerciseId];
       if (!ex) return prev;
-      const updatedSets = ex.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s));
+
+      const updatedSets = ex.sets.map((s) => {
+        if (s.id === setId) {
+          return { ...s, ...updates };
+        }
+        // If we recalculated warmups because working weight changed, update warmup weights
+        if (newWarmups && s.isWarmup) {
+          const match = newWarmups.find((nw) => nw.setNumber === s.setNumber);
+          return match ? { ...s, weight: match.weight } : s;
+        }
+        // If this is another uncompleted working set and working weight changed, sync its weight
+        if (isUpdatingWeight && targetSet && !targetSet.isWarmup && !s.isWarmup && !s.completed) {
+          return { ...s, weight: updates.weight! };
+        }
+        return s;
+      });
+
       return {
         ...prev,
         [exerciseId]: { ...ex, sets: updatedSets },
@@ -246,6 +371,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
       sounds.playTick();
       setRestTimerSeconds(exercise.restTimeSeconds || 120);
       setRestExerciseName(exercise.name);
+      setTimerStartKey((k) => k + 1);
       setIsRestTimerActive(true);
     }
   };
@@ -278,6 +404,8 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     };
 
     onFinishWorkout(session);
+    onUpdateDraft?.(null);
+    setIsDraftRestored(false);
     sounds.playVictoryFanfare();
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
   };
@@ -408,6 +536,22 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Draft Restored Banner */}
+      {isDraftRestored && (
+        <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Workout in progress — restored from draft.</span>
+          </div>
+          <button
+            onClick={handleDiscardDraft}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs border border-amber-500/40 transition active:scale-95"
+          >
+            Discard draft
+          </button>
+        </div>
+      )}
 
       {/* Auto-Calculation Notification Banner */}
       <div className="px-3.5 py-2.5 rounded-2xl bg-zinc-900/90 border border-emerald-500/30 text-xs text-zinc-300 flex items-center justify-between gap-2.5">
@@ -1113,6 +1257,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
         isActive={isRestTimerActive}
         onClose={() => setIsRestTimerActive(false)}
         exerciseName={restExerciseName}
+        startKey={timerStartKey}
       />
 
       {/* Warmup Pyramid Modal */}

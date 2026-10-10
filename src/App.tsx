@@ -13,6 +13,7 @@ import {
   seedSampleDemoData,
   getDefaultProfile,
 } from './utils/storage';
+import { convertWeight } from './utils/progression';
 import { Navbar } from './components/Navbar';
 import { RoadmapView } from './components/RoadmapView';
 import { WorkoutView } from './components/WorkoutView';
@@ -26,7 +27,9 @@ import { Award, CheckCircle2, Dumbbell, Flame, Sparkles, X } from 'lucide-react'
 
 export default function App() {
   const [profile, setProfile] = useState<UserFitnessProfile>(() => loadUserProfile());
-  const [selectedWeek, setSelectedWeek] = useState<number>(profile.currentWeek || 1);
+  const [selectedWeek, setSelectedWeek] = useState<number>(
+    profile.activeWorkoutDraft?.weekNumber || profile.currentWeek || 1
+  );
   const [currentTab, setCurrentTab] = useState<
     'roadmap' | 'workout' | 'bonus' | 'targets' | 'analytics' | 'badges'
   >('roadmap');
@@ -44,10 +47,84 @@ export default function App() {
     saveUserProfile(profile);
   }, [profile]);
 
+  const handleUpdateDraft = (draft: UserFitnessProfile['activeWorkoutDraft']) => {
+    setProfile((prev) => ({ ...prev, activeWorkoutDraft: draft }));
+  };
+
   const handleToggleUnit = () => {
+    const fromUnit = profile.weightUnit;
+    const toUnit = fromUnit === 'kg' ? 'lbs' : 'kg';
+
+    if (!window.confirm(`Convert all logged weights from ${fromUnit} to ${toUnit}?`)) {
+      return;
+    }
+
     setProfile((prev) => {
-      const nextUnit = prev.weightUnit === 'kg' ? 'lbs' : 'kg';
-      const updated = { ...prev, weightUnit: nextUnit as 'kg' | 'lbs' };
+      // 1. Convert completedWorkouts
+      const convertedCompleted = prev.completedWorkouts.map((w) => ({
+        ...w,
+        exercises: w.exercises.map((ex) => ({
+          ...ex,
+          sets: ex.sets.map((s) => ({
+            ...s,
+            weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
+          })),
+        })),
+      }));
+
+      // 2. Convert bonusSessions
+      const convertedBonus = prev.bonusSessions.map((b) => ({
+        ...b,
+        exercisesLogged: b.exercisesLogged?.map((ex) => ({
+          ...ex,
+          sets: ex.sets.map((s) => ({
+            ...s,
+            weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
+          })),
+        })),
+      }));
+
+      // 3. Convert weeklyTargets
+      const convertedTargets: Record<string, WeeklyExerciseTarget> = {};
+      Object.entries(prev.weeklyTargets).forEach(([key, t]) => {
+        convertedTargets[key] = {
+          ...t,
+          targetWeight: t.targetWeight > 0 ? convertWeight(t.targetWeight, fromUnit, toUnit) : t.targetWeight,
+        };
+      });
+
+      // 4. Convert activeWorkoutDraft
+      let convertedDraft = prev.activeWorkoutDraft;
+      if (convertedDraft) {
+        const convertedBaseWeights: Record<string, number> = {};
+        if (convertedDraft.baseWorkingWeights) {
+          Object.entries(convertedDraft.baseWorkingWeights).forEach(([exId, w]) => {
+            convertedBaseWeights[exId] = w > 0 ? convertWeight(w, fromUnit, toUnit) : w;
+          });
+        }
+
+        convertedDraft = {
+          ...convertedDraft,
+          exercises: convertedDraft.exercises.map((ex) => ({
+            ...ex,
+            sets: ex.sets.map((s) => ({
+              ...s,
+              weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
+            })),
+          })),
+          baseWorkingWeights: convertedDraft.baseWorkingWeights ? convertedBaseWeights : undefined,
+        };
+      }
+
+      const updated: UserFitnessProfile = {
+        ...prev,
+        weightUnit: toUnit,
+        completedWorkouts: convertedCompleted,
+        bonusSessions: convertedBonus,
+        weeklyTargets: convertedTargets,
+        activeWorkoutDraft: convertedDraft,
+      };
+
       saveUserProfile(updated);
       return updated;
     });
@@ -64,6 +141,7 @@ export default function App() {
     const updatedProfile: UserFitnessProfile = {
       ...profile,
       completedWorkouts: nextCompleted,
+      activeWorkoutDraft: null,
     };
 
     const { profile: evaluated, newlyUnlockedBadges } = updateStreakAndBadges(updatedProfile);
@@ -98,7 +176,15 @@ export default function App() {
   };
 
   const handleLoadDemoData = () => {
+    if (
+      !window.confirm(
+        'Load demo data? This REPLACES all your logged workouts, targets and badges. Export a backup first if you want to keep them.'
+      )
+    ) {
+      return;
+    }
     const demo = seedSampleDemoData();
+    demo.activeWorkoutDraft = null;
     setProfile(demo);
     setSelectedWeek(demo.currentWeek);
   };
@@ -106,6 +192,7 @@ export default function App() {
   const handleResetData = () => {
     if (window.confirm('Reset all logged workouts and achievements to start fresh?')) {
       const reset = getDefaultProfile();
+      reset.activeWorkoutDraft = null;
       setProfile(reset);
       setSelectedWeek(1);
       saveUserProfile(reset);
@@ -160,6 +247,7 @@ export default function App() {
             selectedWeek={selectedWeek}
             onFinishWorkout={handleFinishWorkout}
             onOpenRirGuide={() => setIsRirGuideOpen(true)}
+            onUpdateDraft={handleUpdateDraft}
           />
         )}
 

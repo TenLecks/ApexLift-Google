@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UserFitnessProfile,
   WeeklyExerciseTarget,
@@ -65,6 +65,34 @@ export const WeeklyTargetsView: React.FC<WeeklyTargetsViewProps> = ({
   });
 
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    const map: Record<string, WeeklyExerciseTarget> = {};
+    allExercises.forEach((ex) => {
+      const key = `${selectedWeek}_${ex.id}`;
+      if (profile.weeklyTargets[key]) {
+        map[ex.id] = { ...profile.weeklyTargets[key] };
+      } else {
+        const smart = generateSmartTarget(
+          ex,
+          selectedWeek,
+          profile.completedWorkouts,
+          profile.weightUnit
+        );
+        map[ex.id] = {
+          exerciseId: ex.id,
+          weekNumber: selectedWeek,
+          targetWeight: smart.suggestedWeight,
+          targetRepsMin: smart.suggestedRepsMin,
+          targetRepsMax: smart.suggestedRepsMax,
+          targetRpe: smart.targetRpe,
+          isCustomOverride: false,
+        };
+      }
+    });
+    setLocalTargets(map);
+    setSavedSuccess(false);
+  }, [selectedWeek, profile.weeklyTargets, profile.completedWorkouts, profile.weightUnit]);
 
   const handleUpdate = (exerciseId: string, updates: Partial<WeeklyExerciseTarget>) => {
     setLocalTargets((prev) => ({

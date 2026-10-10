@@ -67,6 +67,25 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
       });
     });
 
+    const bonus = profile.bonusSessions.filter((b) => b.weekNumber === w);
+    bonus.forEach((b) => {
+      b.exercisesLogged?.forEach((ex) => {
+        if (ex.exerciseName.toLowerCase().includes(selectedExerciseName.toLowerCase())) {
+          ex.sets.forEach((set) => {
+            if (!set.isWarmup && set.completed && set.weight > 0 && set.reps > 0) {
+              const est = calculate1RM(set.weight, set.reps);
+              if (est > weekBest1RM) {
+                weekBest1RM = est;
+                weekBestWeight = set.weight;
+                weekBestReps = set.reps;
+                logDate = b.date;
+              }
+            }
+          });
+        }
+      });
+    });
+
     if (weekBest1RM > 0) {
       oneRmHistory.push({
         week: w,

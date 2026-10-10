@@ -38,7 +38,9 @@ export function loadUserProfile(): UserFitnessProfile {
       });
     }
     parsed.badges = mergedBadges;
-    return parsed;
+    // Evaluate streak & currentWeek on load so existing users get correct currentWeek immediately
+    const evaluated = updateStreakAndBadges(parsed).profile;
+    return evaluated;
   } catch (e) {
     console.error('Failed to load fitness profile from localStorage:', e);
     return getDefaultProfile();
@@ -72,16 +74,33 @@ export function updateStreakAndBadges(profile: UserFitnessProfile): {
     weekMap.get(w.weekNumber)!.add(w.dayType);
   });
 
-  // Count consecutive complete weeks
-  let currentStreak = 0;
+  // 1. Compute currentWeek = the first week 1..12 where Full Body A and Full Body B are NOT both completed; if all 12 are complete, use 12.
+  let computedCurrentWeek = 12;
   for (let w = 1; w <= 12; w++) {
+    const days = weekMap.get(w);
+    const hasA = days?.has('Full Body A');
+    const hasB = days?.has('Full Body B');
+    if (!hasA || !hasB) {
+      computedCurrentWeek = w;
+      break;
+    }
+  }
+  updated.currentWeek = computedCurrentWeek;
+
+  // 2. Rewrite the streak calc to be truly consecutive:
+  // Iterate weeks 1..(currentWeek-1)... streak = number of consecutive fully-completed weeks ending at the most recent fully-completed week before the current week, resetting to 0 on any incomplete past week.
+  // (A week that is still in progress — the current week — must not break the streak.)
+  let currentStreak = 0;
+  const isWeek12FullyComplete = weekMap.get(12)?.has('Full Body A') && weekMap.get(12)?.has('Full Body B');
+  const lastWeekToCheck = (computedCurrentWeek === 12 && isWeek12FullyComplete) ? 12 : computedCurrentWeek - 1;
+
+  for (let w = 1; w <= lastWeekToCheck; w++) {
     const days = weekMap.get(w);
     const hasA = days?.has('Full Body A');
     const hasB = days?.has('Full Body B');
     if (hasA && hasB) {
       currentStreak++;
-    } else if (w < updated.currentWeek) {
-      // In a past week, if missed both, reset streak
+    } else {
       currentStreak = 0;
     }
   }
