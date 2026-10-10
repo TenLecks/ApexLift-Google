@@ -199,7 +199,34 @@ export default function App() {
     }
   };
 
+  const handleSelectWeek = (week: number) => {
+    if (week === selectedWeek) return;
+    const draft = profile.activeWorkoutDraft;
+    const hasCompletedSet = draft?.exercises.some((ex) => ex.sets.some((s) => s.completed));
+    if (draft && draft.weekNumber !== week && hasCompletedSet) {
+      const confirmed = window.confirm(
+        `You have an unfinished ${draft.dayType} workout. Switch anyway and discard it?`
+      );
+      if (!confirmed) {
+        return;
+      }
+      handleUpdateDraft(null);
+    }
+    setSelectedWeek(week);
+  };
+
   const handleStartWorkout = (week: number, dayType: 'Full Body A' | 'Full Body B') => {
+    const draft = profile.activeWorkoutDraft;
+    const hasCompletedSet = draft?.exercises.some((ex) => ex.sets.some((s) => s.completed));
+    if (draft && (draft.weekNumber !== week || draft.dayType !== dayType) && hasCompletedSet) {
+      const confirmed = window.confirm(
+        `You have an unfinished ${draft.dayType} workout. Switch anyway and discard it?`
+      );
+      if (!confirmed) {
+        return;
+      }
+      handleUpdateDraft(null);
+    }
     setSelectedWeek(week);
     setCurrentTab('workout');
   };
@@ -217,7 +244,7 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         profile={profile}
         selectedWeek={selectedWeek}
-        setSelectedWeek={setSelectedWeek}
+        setSelectedWeek={handleSelectWeek}
         onToggleUnit={handleToggleUnit}
         onOpenRirGuide={() => setIsRirGuideOpen(true)}
         onOpenAdaptiveBonus={() => {
@@ -235,7 +262,7 @@ export default function App() {
           <RoadmapView
             profile={profile}
             selectedWeek={selectedWeek}
-            onSelectWeek={setSelectedWeek}
+            onSelectWeek={handleSelectWeek}
             onStartWorkout={handleStartWorkout}
             onOpenAdaptiveBonus={handleOpenBonusFromRoadmap}
           />

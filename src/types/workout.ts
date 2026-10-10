@@ -152,6 +152,7 @@ export interface UserFitnessProfile {
     startedAt: string;
     exercises: LoggedExercise[];
     baseWorkingWeights?: Record<string, number>;
+    hasWeightChanged?: boolean;
   } | null;
 }
 

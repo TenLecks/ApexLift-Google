@@ -76,6 +76,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [isDraftRestored, setIsDraftRestored] = useState<boolean>(false);
+  const [hasWeightChanged, setHasWeightChanged] = useState<boolean>(false);
 
   // Warmup pyramid modal state
   const [warmupModalExercise, setWarmupModalExercise] = useState<{
@@ -162,30 +163,38 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     // 2. If an active workout draft exists for this week + dayType, restore it!
     const draft = profile.activeWorkoutDraft;
     if (draft && draft.weekNumber === selectedWeek && draft.dayType === selectedDayType) {
-      const initialLogs: Record<string, LoggedExercise> = {};
-      draft.exercises.forEach((ex) => {
-        initialLogs[ex.exerciseId] = ex;
-      });
-      setExerciseLogs(initialLogs);
-      if (draft.baseWorkingWeights) {
-        setBaseWorkingWeights(draft.baseWorkingWeights);
-      } else {
-        const initialBaseWeights: Record<string, number> = {};
+      const draftHasCompleted = draft.exercises.some((ex) => ex.sets.some((s) => s.completed));
+      const draftHasWeightChanged = Boolean(draft.hasWeightChanged);
+
+      // Only restore as active draft and show banner if user completed at least one set or changed a weight
+      if (draftHasCompleted || draftHasWeightChanged) {
+        const initialLogs: Record<string, LoggedExercise> = {};
         draft.exercises.forEach((ex) => {
-          const firstWorking = ex.sets.find((s) => !s.isWarmup && s.weight > 0);
-          if (firstWorking) initialBaseWeights[ex.exerciseId] = firstWorking.weight;
+          initialLogs[ex.exerciseId] = ex;
         });
-        setBaseWorkingWeights(initialBaseWeights);
+        setExerciseLogs(initialLogs);
+        if (draft.baseWorkingWeights) {
+          setBaseWorkingWeights(draft.baseWorkingWeights);
+        } else {
+          const initialBaseWeights: Record<string, number> = {};
+          draft.exercises.forEach((ex) => {
+            const firstWorking = ex.sets.find((s) => !s.isWarmup && s.weight > 0);
+            if (firstWorking) initialBaseWeights[ex.exerciseId] = firstWorking.weight;
+          });
+          setBaseWorkingWeights(initialBaseWeights);
+        }
+        if (draft.startedAt) {
+          setStartTime(new Date(draft.startedAt).getTime() || Date.now());
+        }
+        setIsDraftRestored(true);
+        setHasWeightChanged(draftHasWeightChanged);
+        return;
       }
-      if (draft.startedAt) {
-        setStartTime(new Date(draft.startedAt).getTime() || Date.now());
-      }
-      setIsDraftRestored(true);
-      return;
     }
 
     // 3. Otherwise generate fresh targets
     setIsDraftRestored(false);
+    setHasWeightChanged(false);
     const initialLogs: Record<string, LoggedExercise> = {};
     const initialBaseWeights: Record<string, number> = {};
 
@@ -231,18 +240,37 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     if (existingCompletedSession) return;
     if (Object.keys(exerciseLogs).length === 0) return;
 
+    const hasCompletedSet = Object.values(exerciseLogs).some((ex) =>
+      ex.sets.some((s) => s.completed)
+    );
+
+    // Don't save a draft until user has completed at least one set or changed a weight
+    if (!hasCompletedSet && !hasWeightChanged) {
+      return;
+    }
+
     onUpdateDraft?.({
       weekNumber: selectedWeek,
       dayType: selectedDayType,
       startedAt: new Date(startTime).toISOString(),
       exercises: Object.values(exerciseLogs),
       baseWorkingWeights,
+      hasWeightChanged,
     });
-  }, [exerciseLogs, baseWorkingWeights, selectedWeek, selectedDayType, startTime, existingCompletedSession]);
+  }, [
+    exerciseLogs,
+    baseWorkingWeights,
+    selectedWeek,
+    selectedDayType,
+    startTime,
+    existingCompletedSession,
+    hasWeightChanged,
+  ]);
 
   const handleDiscardDraft = () => {
     onUpdateDraft?.(null);
     setIsDraftRestored(false);
+    setHasWeightChanged(false);
 
     const initialLogs: Record<string, LoggedExercise> = {};
     const initialBaseWeights: Record<string, number> = {};
@@ -288,6 +316,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     const isDb = checkIsDumbbell(exercise.name);
     const validWeight = Math.max(0, Math.round(newWeight * 10) / 10);
     setBaseWorkingWeights((prev) => ({ ...prev, [exercise.id]: validWeight }));
+    setHasWeightChanged(true);
 
     setExerciseLogs((prev) => {
       const ex = prev[exercise.id];
@@ -312,18 +341,8 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
   };
 
   const handleUpdateSet = (exerciseId: string, setId: string, updates: Partial<LoggedSet>) => {
-    const currentEx = exerciseLogs[exerciseId];
-    const targetSet = currentEx?.sets.find((s) => s.id === setId);
-    const isUpdatingWeight =
-      updates.weight !== undefined && targetSet && updates.weight !== targetSet.weight;
-
-    let newWarmups: LoggedSet[] | null = null;
-    if (isUpdatingWeight && targetSet && !targetSet.isWarmup) {
-      const exerciseDef = activeTemplate.exercises.find((e) => e.id === exerciseId);
-      if (exerciseDef) {
-        newWarmups = computeWarmupSetsForWeight(exerciseDef, updates.weight!);
-      }
-      setBaseWorkingWeights((bw) => ({ ...bw, [exerciseId]: updates.weight! }));
+    if (updates.weight !== undefined) {
+      setHasWeightChanged(true);
     }
 
     setExerciseLogs((prev) => {
@@ -333,15 +352,6 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
       const updatedSets = ex.sets.map((s) => {
         if (s.id === setId) {
           return { ...s, ...updates };
-        }
-        // If we recalculated warmups because working weight changed, update warmup weights
-        if (newWarmups && s.isWarmup) {
-          const match = newWarmups.find((nw) => nw.setNumber === s.setNumber);
-          return match ? { ...s, weight: match.weight } : s;
-        }
-        // If this is another uncompleted working set and working weight changed, sync its weight
-        if (isUpdatingWeight && targetSet && !targetSet.isWarmup && !s.isWarmup && !s.completed) {
-          return { ...s, weight: updates.weight! };
         }
         return s;
       });
@@ -391,6 +401,44 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     });
   };
 
+  const handleSwitchDay = (targetDay: 'Full Body A' | 'Full Body B') => {
+    if (targetDay === selectedDayType) return;
+
+    // Check if there is an unfinished workout with at least one completed set
+    const currentCompletedSets = Object.values(exerciseLogs).some((ex) =>
+      ex.sets.some((s) => s.completed)
+    );
+    const draftCompletedSets = profile.activeWorkoutDraft?.exercises.some((ex) =>
+      ex.sets.some((s) => s.completed)
+    );
+
+    let unfinishedDay: string | null = null;
+    if (currentCompletedSets) {
+      unfinishedDay = selectedDayType;
+    } else if (
+      draftCompletedSets &&
+      (profile.activeWorkoutDraft?.dayType !== targetDay ||
+        profile.activeWorkoutDraft?.weekNumber !== selectedWeek)
+    ) {
+      unfinishedDay = profile.activeWorkoutDraft?.dayType || selectedDayType;
+    }
+
+    if (unfinishedDay) {
+      const confirmed = window.confirm(
+        `You have an unfinished ${unfinishedDay} workout. Switch anyway and discard it?`
+      );
+      if (!confirmed) {
+        return;
+      }
+      onUpdateDraft?.(null);
+      setIsDraftRestored(false);
+      setHasWeightChanged(false);
+    }
+
+    setSelectedDayType(targetDay);
+    setFocusExerciseIndex(0);
+  };
+
   const handleFinish = () => {
     const durationMins = Math.max(1, Math.round((Date.now() - startTime) / 60000));
     const session: CompletedWorkoutSession = {
@@ -406,6 +454,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
     onFinishWorkout(session);
     onUpdateDraft?.(null);
     setIsDraftRestored(false);
+    setHasWeightChanged(false);
     sounds.playVictoryFanfare();
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
   };
@@ -448,10 +497,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
           {/* Toggle Full Body A vs Full Body B */}
           <div className="flex items-center gap-1.5 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 self-stretch sm:self-center">
             <button
-              onClick={() => {
-                setSelectedDayType('Full Body A');
-                setFocusExerciseIndex(0);
-              }}
+              onClick={() => handleSwitchDay('Full Body A')}
               className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-center ${
                 selectedDayType === 'Full Body A'
                   ? 'bg-emerald-500 text-zinc-950 shadow-sm'
@@ -461,10 +507,7 @@ export const WorkoutView: React.FC<WorkoutViewProps> = ({
               Full Body A
             </button>
             <button
-              onClick={() => {
-                setSelectedDayType('Full Body B');
-                setFocusExerciseIndex(0);
-              }}
+              onClick={() => handleSwitchDay('Full Body B')}
               className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-center ${
                 selectedDayType === 'Full Body B'
                   ? 'bg-emerald-500 text-zinc-950 shadow-sm'
