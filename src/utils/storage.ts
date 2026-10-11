@@ -148,9 +148,42 @@ export function updateStreakAndBadges(profile: UserFitnessProfile): {
 
   // Calculate XP and level
   // 50 XP per workout, 15 XP per hard set, 40 XP per bonus session, 100 XP per badge
-  const baseWorkoutXp = updated.completedWorkouts.length * 50;
-  const setsXp = totalWorkingSets * 15;
-  const bonusXp = updated.bonusSessions.length * 40;
+  // Include workouts, sets and bonus sessions from profile.pastCycles so starting a new cycle preserves earned XP
+  let pastWorkoutsCount = 0;
+  let pastWorkingSetsCount = 0;
+  let pastBonusSessionsCount = 0;
+
+  if (Array.isArray(updated.pastCycles)) {
+    updated.pastCycles.forEach((cycle) => {
+      if (Array.isArray(cycle.completedWorkouts)) {
+        pastWorkoutsCount += cycle.completedWorkouts.length;
+        cycle.completedWorkouts.forEach((w) => {
+          if (Array.isArray(w.exercises)) {
+            w.exercises.forEach((ex) => {
+              if (Array.isArray(ex.sets)) {
+                ex.sets.forEach((s) => {
+                  if (!s.isWarmup && s.completed) {
+                    pastWorkingSetsCount++;
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+      if (Array.isArray(cycle.bonusSessions)) {
+        pastBonusSessionsCount += cycle.bonusSessions.length;
+      }
+    });
+  }
+
+  const totalWorkoutsForXp = updated.completedWorkouts.length + pastWorkoutsCount;
+  const totalWorkingSetsForXp = totalWorkingSets + pastWorkingSetsCount;
+  const totalBonusSessionsForXp = updated.bonusSessions.length + pastBonusSessionsCount;
+
+  const baseWorkoutXp = totalWorkoutsForXp * 50;
+  const setsXp = totalWorkingSetsForXp * 15;
+  const bonusXp = totalBonusSessionsForXp * 40;
   const unlockedBadgesCount = Object.values(updated.badges).filter((b) => !!b.unlockedAt).length;
   const badgesXp = unlockedBadgesCount * 100;
   
