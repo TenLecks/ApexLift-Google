@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useBackHandler } from '../../hooks/useBackHandler';
 import confetti from 'canvas-confetti';
 import { ChevronLeft, Flag, MoreVertical, RotateCcw, ArrowRightLeft, Info } from 'lucide-react';
 import type { CompletedWorkoutSession, LoggedExercise, LoggedSet, UserFitnessProfile } from '../../types/workout';
@@ -63,6 +64,8 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [topMenuOpen, setTopMenuOpen] = useState(false);
   const [warmupCalcFor, setWarmupCalcFor] = useState<string | null>(null);
+  useBackHandler(topMenuOpen, () => setTopMenuOpen(false));
+  useBackHandler(warmupCalcFor !== null, () => setWarmupCalcFor(null));
   const [resetKey, setResetKey] = useState(0);
   const [now, setNow] = useState(Date.now());
   const rest = useRestCountdown();
@@ -177,7 +180,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
     if (!selectedSet.completed) {
       nextLogs = { ...logs, [selected.exerciseId]: updateSet(logs[selected.exerciseId], selected.setId, { completed: true }) };
       setLogs(nextLogs);
-      if (!selectedSet.isWarmup) rest.start(ex.restTimeSeconds || 120);
+      if (!selectedSet.isWarmup) rest.start(ex.restTimeSeconds || 120, logs[selected.exerciseId]?.exerciseName || ex.name);
       else sounds.playTick();
     }
     focus(nextLogs);

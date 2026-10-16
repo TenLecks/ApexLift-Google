@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBackHandler } from '../../hooks/useBackHandler';
 import { Calculator, X } from 'lucide-react';
 import type { ExerciseDefinition, LoggedExercise } from '../../types/workout';
 
@@ -15,6 +16,7 @@ interface ExerciseMenuProps {
 // Bottom sheet with the rarely used per-exercise extras (spec §1).
 export const ExerciseMenu: React.FC<ExerciseMenuProps> = ({ exercise, log, readOnly, onClose, onSwap, onSaveNote, onWarmupCalculator }) => {
   const [note, setNote] = useState(log.notes ?? '');
+  useBackHandler(true, onClose);
   const current = log.chosenSubstitution ?? exercise.name;
   const options = [exercise.name, exercise.substitution1, exercise.substitution2].filter(Boolean);
 

@@ -25,6 +25,8 @@ import { BadgesView } from './components/BadgesView';
 import { AdaptiveBonusModal } from './components/AdaptiveBonusModal';
 import { RirGuideModal } from './components/RirGuideModal';
 import { BackupScreen } from './components/shell/BackupScreen';
+import { backStack } from './utils/backStack';
+import { addNativeListener, callNative } from './utils/native';
 import { UpdatesScreen } from './components/shell/UpdatesScreen';
 import { autoBackup, retryPendingBackup } from './utils/gistBackup';
 import { Award, X } from 'lucide-react';
@@ -65,6 +67,27 @@ export default function App() {
   profileRef.current = profile;
 
   useEffect(() => setViewWeek(profile.currentWeek || 1), [profile.currentWeek, profile.completedWorkouts.length]);
+
+  // Android back button: open sheets/menus first, then workout → sub-screen → Workout tab → exit.
+  const [exitHint, setExitHint] = useState(false);
+  const navRef = useRef({ inWorkout, sub, tab, exitHint });
+  navRef.current = { inWorkout, sub, tab, exitHint };
+  useEffect(
+    () =>
+      addNativeListener('App', 'backButton', () => {
+        if (backStack.handle()) return;
+        const n = navRef.current;
+        if (n.inWorkout) setInWorkout(false);
+        else if (n.sub) setSub(null);
+        else if (n.tab !== 'workout') setTab('workout');
+        else if (n.exitHint) void callNative('App', 'exitApp');
+        else {
+          setExitHint(true);
+          setTimeout(() => setExitHint(false), 2000);
+        }
+      }),
+    []
+  );
   useEffect(() => {
     const onVisible = () => {
       if (!document.hidden) setViewWeek(profileRef.current.currentWeek || 1);
@@ -423,6 +446,12 @@ export default function App() {
         weekNumber={adaptiveBonusWeek}
         onSaveBonusSession={handleSaveBonusSession}
       />
+
+      {exitHint && (
+        <div className="fixed inset-x-0 bottom-24 z-50 flex justify-center pointer-events-none">
+          <div className="rounded-full bg-zinc-100 text-zinc-950 text-sm px-4 py-2 shadow-lg">Press back again to exit</div>
+        </div>
+      )}
 
       {badgeToast && (
         <div className="fixed top-4 inset-x-4 mx-auto z-50 max-w-sm bg-gradient-to-r from-amber-500 to-yellow-600 text-zinc-950 p-4 rounded-2xl shadow-2xl flex items-start gap-3">

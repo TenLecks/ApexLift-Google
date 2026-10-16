@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBackHandler } from '../hooks/useBackHandler';
 import { X, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface RirGuideModalProps {
@@ -7,6 +8,7 @@ interface RirGuideModalProps {
 }
 
 export const RirGuideModal: React.FC<RirGuideModalProps> = ({ isOpen, onClose }) => {
+  useBackHandler(isOpen, onClose);
   if (!isOpen) return null;
 
   return (

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBackHandler } from '../hooks/useBackHandler';
 import {
   X,
   Sliders,
@@ -45,6 +46,7 @@ export const AdaptiveBonusModal: React.FC<AdaptiveBonusModalProps> = ({
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
 
+  useBackHandler(isOpen, onClose);
   if (!isOpen) return null;
 
   // Adaptive Algorithm Decision Logic (Option A):
