@@ -89,6 +89,11 @@ await test('first time → baseline and isFirstTime', () => {
   assert.equal(p.targetWeight, 30);
   assert.deepEqual(p.sets.map((s) => s.reps), [8, 8]);
 });
+await test('first-time baseline is rounded to the exercise weight step (dumbbells → 2 kg)', () => {
+  const p = planExercise({ exercise: { ...dbPress, isHeavyOrBackoff: 'backoff' }, weekNumber: 1, isDeload: false, unit: 'kg', workouts: [] });
+  assert.equal(p.targetWeight % 2, 0);
+  assert.equal(p.targetWeight, 22);
+});
 await test('substitution history is kept separate', () => {
   const p = planExercise({
     exercise: rdl, weekNumber: 2, isDeload: false, unit: 'kg',

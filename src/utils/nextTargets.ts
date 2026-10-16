@@ -186,7 +186,7 @@ export function planExercise(args: PlanExerciseArgs): ExercisePlan {
   }
   if (!last) {
     const base = ex.isHeavyOrBackoff === 'heavy' ? (unit === 'kg' ? 30 : 65) : unit === 'kg' ? 22.5 : 50;
-    return uniform(base, ex.minReps, T, 'First time — calibrate today with your warm-ups', true);
+    return uniform(roundToStep(base, step), ex.minReps, T, 'First time — calibrate today with your warm-ups', true);
   }
   if (last.pastCycleNumber !== undefined) {
     const top = topSetOf(last.sets);
