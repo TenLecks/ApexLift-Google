@@ -281,7 +281,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
             <MoreVertical className="w-5 h-5" />
           </button>
           {topMenuOpen && (
-            <div className="absolute right-0 mt-1 w-56 rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl py-1 text-sm z-40">
+            <div className="absolute right-0 mt-1 w-56 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-200 shadow-xl py-1 text-sm z-40">
               <button type="button" onClick={switchDay} className="w-full px-3 py-2.5 text-left flex items-center gap-2 active:bg-zinc-800">
                 <ArrowRightLeft className="w-4 h-4" /> Switch to {dayType === 'Full Body A' ? 'Full Body B' : 'Full Body A'}
               </button>
