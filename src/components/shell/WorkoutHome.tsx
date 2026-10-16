@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Circle, Eye, Play, RotateCw, Sparkles, Trophy } from 'lucide-react';
+import { Check, Circle, Eye, Play, RotateCw, Sparkles, Trophy } from 'lucide-react';
+import { useWeekSwipe } from '../../hooks/useWeekSwipe';
 import type { UserFitnessProfile } from '../../types/workout';
 import { PROGRAM_WEEKS } from '../../data/programData';
 import { estimateMinutes, nextWorkout, plusOneTarget, weekStatus } from '../../utils/home';
@@ -34,36 +35,32 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
   useEffect(() => setUsePrevious(target.isPrevious), [target.isPrevious, current]);
   const plusOneWeek = status === 'current' ? (target.isPrevious && usePrevious ? current - 1 : current) : viewWeek;
   const countsForPrevious = status === 'current' && plusOneWeek === current - 1;
+  const swipe = useWeekSwipe({
+    canPrev: viewWeek > 1,
+    canNext: viewWeek < 12,
+    onStep: (step) => onChangeWeek(viewWeek + step),
+  });
 
   return (
+    <div {...swipe.bind} className="-mx-4 overflow-x-clip">
+    <div style={swipe.slideStyle} className="px-4">
     <div className="mx-auto max-w-[480px] space-y-3">
       <div className="-mx-4 -mt-4 px-4 pt-3 pb-3 bg-frame">
-        <div className="flex items-center justify-between rounded-xl bg-frame-2 px-1 py-1">
-          <button
-            type="button"
-            aria-label="Previous week"
-            disabled={viewWeek <= 1}
-            onClick={() => onChangeWeek(viewWeek - 1)}
-            className="w-11 h-9 rounded-lg flex items-center justify-center text-frame-muted disabled:opacity-30 active:bg-frame"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="text-center">
-            <div className="font-black text-frame-ink">Week {viewWeek}</div>
-            <div className="text-[10px] text-frame-muted">
-              {plan.blockTitle}
-              {plan.isDeload ? ' · deload' : ''}
-            </div>
+        <div className="rounded-xl bg-frame-2 px-3 py-2 text-center">
+          <div className="font-black text-frame-ink">Week {viewWeek}</div>
+          <div className="text-[10px] text-frame-muted">
+            {plan.blockTitle}
+            {plan.isDeload ? ' · deload' : ''}
           </div>
-          <button
-            type="button"
-            aria-label="Next week"
-            disabled={viewWeek >= 12}
-            onClick={() => onChangeWeek(viewWeek + 1)}
-            className="w-11 h-9 rounded-lg flex items-center justify-center text-frame-muted disabled:opacity-30 active:bg-frame"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          {/* Position in the 12 weeks; swipe left/right to move. */}
+          <div className="mt-1.5 flex justify-center gap-1" aria-hidden="true">
+            {Array.from({ length: 12 }, (_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 rounded-full ${i + 1 === viewWeek ? 'w-4 bg-frame-ink' : i + 1 === current ? 'w-1.5 bg-frame-ink/70' : 'w-1.5 bg-frame-ink/30'}`}
+              />
+            ))}
+          </div>
         </div>
         <div className="mt-1.5 text-center text-[11px] text-frame-muted">
           {status === 'current' ? (
@@ -193,6 +190,8 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
           </div>
         ))}
       </div>
+    </div>
+    </div>
     </div>
   );
 };
