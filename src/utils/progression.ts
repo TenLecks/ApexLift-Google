@@ -8,6 +8,7 @@ import {
   LoggedExercise,
 } from '../types/workout';
 import { PROGRAM_WEEKS } from '../data/programData';
+import { planExercise } from './nextTargets';
 
 // Map of all known exercise IDs to their target muscles
 const EXERCISE_ID_TO_MUSCLES_MAP = new Map<string, MuscleGroup[]>();
@@ -156,121 +157,17 @@ export function generateSmartTarget(
   chosenSubstitution?: string,
   pastCycles?: PastCycle[]
 ): TargetSuggestion {
-  const isMatchingSubstitution = (e: LoggedExercise) => {
-    if (e.exerciseId !== exercise.id) return false;
-    const loggedSub = e.chosenSubstitution ? e.chosenSubstitution.trim() : undefined;
-    const targetSub = chosenSubstitution ? chosenSubstitution.trim() : undefined;
-    return loggedSub === targetSub;
-  };
-
-  // 1. Find the most recent session containing this exercise with the SAME substitution in current cycle
-  let lastLoggedSets: { weight: number; reps: number; rpe: number; rir: number }[] = [];
-  let previousDate: string | undefined = undefined;
-
-  for (let w = weekNumber - 1; w >= 1; w--) {
-    const session = allWorkouts.find(
-      (s) => s.weekNumber === w && s.exercises.some(isMatchingSubstitution)
-    );
-    if (session) {
-      const match = session.exercises.find(isMatchingSubstitution);
-      if (match && match.sets.length > 0) {
-        const completedWorkingSets = match.sets.filter((s) => !s.isWarmup && s.completed && s.weight > 0);
-        if (completedWorkingSets.length > 0) {
-          lastLoggedSets = completedWorkingSets;
-          previousDate = session.dateCompleted;
-          break;
-        }
-      }
-    }
-  }
-
-  // 2. If no sets in current cycle, search past cycles in reverse chronological order
-  let isFromPastCycle = false;
-  let pastCycleNum = 1;
-  if (lastLoggedSets.length === 0 && pastCycles && pastCycles.length > 0) {
-    for (let cIdx = pastCycles.length - 1; cIdx >= 0; cIdx--) {
-      const cycle = pastCycles[cIdx];
-      for (let w = 12; w >= 1; w--) {
-        const session = cycle.completedWorkouts.find(
-          (s) => s.weekNumber === w && s.exercises.some(isMatchingSubstitution)
-        );
-        if (session) {
-          const match = session.exercises.find(isMatchingSubstitution);
-          if (match && match.sets.length > 0) {
-            const completedWorkingSets = match.sets.filter((s) => !s.isWarmup && s.completed && s.weight > 0);
-            if (completedWorkingSets.length > 0) {
-              lastLoggedSets = completedWorkingSets;
-              previousDate = session.dateCompleted;
-              isFromPastCycle = true;
-              pastCycleNum = cycle.cycleNumber;
-              break;
-            }
-          }
-        }
-      }
-      if (lastLoggedSets.length > 0) break;
-    }
-  }
-
-  const defaultRpe = parseFloat(exercise.targetRpe.split('-')[0]) || 9;
-
-  if (lastLoggedSets.length === 0) {
-    // Baseline defaults for initial week
-    const baseWeight = exercise.isHeavyOrBackoff === 'heavy' ? (unit === 'kg' ? 30 : 65) : (unit === 'kg' ? 22.5 : 50);
-    return {
-      suggestedWeight: baseWeight,
-      suggestedRepsMin: exercise.minReps,
-      suggestedRepsMax: exercise.maxReps,
-      targetRpe: defaultRpe,
-      reason: 'First time — calibrate today with warmups to find your true working weight.',
-    };
-  }
-
-  // Top set from last time
-  const bestSet = lastLoggedSets.reduce((prev, curr) =>
-    curr.weight * curr.reps > prev.weight * prev.reps ? curr : prev
-  );
-
-  const increment = unit === 'kg' ? (exercise.isHeavyOrBackoff === 'heavy' ? 2.5 : 1.25) : (exercise.isHeavyOrBackoff === 'heavy' ? 5 : 2.5);
-
-  if (isFromPastCycle) {
-    return {
-      suggestedWeight: bestSet.weight,
-      suggestedRepsMin: exercise.minReps,
-      suggestedRepsMax: exercise.maxReps,
-      targetRpe: defaultRpe,
-      previousBestWeight: bestSet.weight,
-      previousBestReps: bestSet.reps,
-      previousSessionDate: previousDate,
-      reason: `Cycle ${pastCycleNum} final weight (${bestSet.weight}${unit} × ${bestSet.reps}). Starting Cycle baseline!`,
-    };
-  }
-
-  // Double progression logic:
-  // If top of rep range was hit: increase weight!
-  if (bestSet.reps >= exercise.maxReps) {
-    return {
-      suggestedWeight: Math.round((bestSet.weight + increment) * 10) / 10,
-      suggestedRepsMin: exercise.minReps,
-      suggestedRepsMax: exercise.maxReps,
-      targetRpe: defaultRpe,
-      previousBestWeight: bestSet.weight,
-      previousBestReps: bestSet.reps,
-      previousSessionDate: previousDate,
-      reason: `Hit top of rep range (${bestSet.reps} reps @ ${bestSet.weight}${unit}). Overload with +${increment}${unit}!`,
-    };
-  }
-
-  // If inside the rep range: aim to add 1 more rep with current weight
+  const isDeload = Boolean(PROGRAM_WEEKS.find((w) => w.weekNumber === weekNumber)?.isDeload);
+  const plan = planExercise({ exercise, weekNumber, isDeload, unit, chosenSubstitution, workouts: allWorkouts, pastCycles });
   return {
-    suggestedWeight: bestSet.weight,
-    suggestedRepsMin: Math.min(bestSet.reps + 1, exercise.maxReps),
+    suggestedWeight: plan.targetWeight,
+    suggestedRepsMin: plan.sets[0].reps,
     suggestedRepsMax: exercise.maxReps,
-    targetRpe: defaultRpe,
-    previousBestWeight: bestSet.weight,
-    previousBestReps: bestSet.reps,
-    previousSessionDate: previousDate,
-    reason: `Maintain ${bestSet.weight}${unit} and aim for ${bestSet.reps + 1} reps (Beat the Logbook).`,
+    targetRpe: plan.sets[0].rpe,
+    reason: plan.reason,
+    previousBestWeight: plan.lastTime?.weight,
+    previousBestReps: plan.lastTime?.reps,
+    previousSessionDate: plan.lastTime?.date,
   };
 }
 
