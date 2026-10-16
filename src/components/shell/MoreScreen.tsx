@@ -35,7 +35,9 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 );
 
 export const MoreScreen: React.FC<MoreScreenProps> = ({ unit, onOpen, onOpenRirGuide, onToggleUnit, onLoadDemo, onReset }) => (
-  <div className="mx-auto max-w-[480px] space-y-5">
+  <div className="space-y-5">
+    <div className="-mx-4 -mt-4 mb-1 px-4 py-3 bg-frame text-frame-ink font-bold">More</div>
+    <div className="mx-auto max-w-[480px] space-y-5">
     <Section title="Program">
       <Row label="12-week roadmap" onClick={() => onOpen('roadmap')} />
       <Row label="Weekly targets" onClick={() => onOpen('targets')} />
@@ -51,5 +53,6 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ unit, onOpen, onOpenRirG
       <Row label="Load demo data" onClick={onLoadDemo} />
       <Row label="Reset all data" danger onClick={onReset} />
     </Section>
+    </div>
   </div>
 );

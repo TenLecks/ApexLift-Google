@@ -260,21 +260,21 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
 
   return (
     <div className="mx-auto max-w-[480px]">
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-zinc-950/95 backdrop-blur border-b border-zinc-900 flex items-center gap-2">
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-frame text-frame-ink flex items-center gap-2">
         {onExit && (
-          <button type="button" aria-label="Back" onClick={onExit} className="p-1.5 -ml-1.5 rounded-lg text-zinc-300 active:bg-zinc-800">
+          <button type="button" aria-label="Back" onClick={onExit} className="p-1.5 -ml-1.5 rounded-lg text-frame-ink active:bg-frame-2">
             <ChevronLeft className="w-5 h-5" />
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-white text-sm truncate">
+          <div className="font-bold text-frame-ink text-sm truncate">
             Week {selectedWeek} · {dayType}
-            {weekPlan.isDeload ? <span className="ml-1.5 text-[10px] text-sky-300 uppercase">deload</span> : null}
+            {weekPlan.isDeload ? <span className="ml-1.5 text-[10px] text-frame-muted uppercase">deload</span> : null}
           </div>
         </div>
-        {!readOnly && <span className="font-mono text-xs text-zinc-400">⏱ {fmtClock(now - startTime)}</span>}
+        {!readOnly && <span className="font-mono text-xs text-frame-muted">⏱ {fmtClock(now - startTime)}</span>}
         <div className="relative">
-          <button type="button" aria-label="Workout options" onClick={() => setTopMenuOpen((o) => !o)} className="p-1.5 rounded-lg text-zinc-300 active:bg-zinc-800">
+          <button type="button" aria-label="Workout options" onClick={() => setTopMenuOpen((o) => !o)} className="p-1.5 rounded-lg text-frame-ink active:bg-frame-2">
             <MoreVertical className="w-5 h-5" />
           </button>
           {topMenuOpen && (

@@ -37,20 +37,20 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
 
   return (
     <div className="mx-auto max-w-[480px] space-y-3">
-      <div>
-        <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-1 py-1">
+      <div className="-mx-4 -mt-4 px-4 pt-3 pb-3 bg-frame">
+        <div className="flex items-center justify-between rounded-xl bg-frame-2 px-1 py-1">
           <button
             type="button"
             aria-label="Previous week"
             disabled={viewWeek <= 1}
             onClick={() => onChangeWeek(viewWeek - 1)}
-            className="w-11 h-9 rounded-lg flex items-center justify-center text-emerald-400 disabled:text-zinc-700 active:bg-zinc-800"
+            className="w-11 h-9 rounded-lg flex items-center justify-center text-frame-muted disabled:opacity-30 active:bg-frame"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <div className="font-black text-white">Week {viewWeek}</div>
-            <div className="text-[10px] text-zinc-500">
+            <div className="font-black text-frame-ink">Week {viewWeek}</div>
+            <div className="text-[10px] text-frame-muted">
               {plan.blockTitle}
               {plan.isDeload ? ' · deload' : ''}
             </div>
@@ -60,18 +60,18 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
             aria-label="Next week"
             disabled={viewWeek >= 12}
             onClick={() => onChangeWeek(viewWeek + 1)}
-            className="w-11 h-9 rounded-lg flex items-center justify-center text-emerald-400 disabled:text-zinc-700 active:bg-zinc-800"
+            className="w-11 h-9 rounded-lg flex items-center justify-center text-frame-muted disabled:opacity-30 active:bg-frame"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
-        <div className="mt-1 text-center text-[11px] text-zinc-400">
+        <div className="mt-1.5 text-center text-[11px] text-frame-muted">
           {status === 'current' ? (
             <>Your current week{profile.streakWeeks > 0 ? ` · 🔥 ${profile.streakWeeks} wk streak` : ''}</>
           ) : (
             <>
               {status === 'past' ? 'Viewing a finished week' : 'Preview'} ·{' '}
-              <button type="button" onClick={() => onChangeWeek(current)} className="text-emerald-400 underline">
+              <button type="button" onClick={() => onChangeWeek(current)} className="text-frame-ink font-semibold underline">
                 Back to Week {current}
               </button>
             </>

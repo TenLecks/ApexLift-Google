@@ -6,6 +6,7 @@ export const StatsScreen: React.FC<{ profile: UserFitnessProfile; selectedWeek: 
   const anchors = profile.completedWorkouts.filter((w) => w.dayType !== 'Adaptive Bonus').length;
   return (
     <div className="space-y-3">
+      <div className="-mx-4 -mt-4 mb-1 px-4 py-3 bg-frame text-frame-ink font-bold">Stats</div>
       <div className="mx-auto max-w-[480px] rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-xs text-zinc-300 flex flex-wrap gap-x-3 gap-y-1">
         <span>
           Week <b className="text-white">{profile.currentWeek || 1}</b> of 12
