@@ -2,7 +2,7 @@ import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { WeightUnit } from '../../types/workout';
 
-export type SubKey = 'roadmap' | 'targets' | 'badges' | 'backup';
+export type SubKey = 'roadmap' | 'targets' | 'badges' | 'backup' | 'updates';
 
 interface MoreScreenProps {
   unit: WeightUnit;
@@ -44,6 +44,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ unit, onOpen, onOpenRirG
     </Section>
     <Section title="Data">
       <Row label="Back up / Restore" onClick={() => onOpen('backup')} />
+      <Row label="App updates" onClick={() => onOpen('updates')} />
     </Section>
     <Section title="Settings">
       <Row label="Units" value={unit} onClick={onToggleUnit} />

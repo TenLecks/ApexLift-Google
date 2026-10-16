@@ -25,6 +25,7 @@ import { BadgesView } from './components/BadgesView';
 import { AdaptiveBonusModal } from './components/AdaptiveBonusModal';
 import { RirGuideModal } from './components/RirGuideModal';
 import { BackupScreen } from './components/shell/BackupScreen';
+import { UpdatesScreen } from './components/shell/UpdatesScreen';
 import { autoBackup, retryPendingBackup } from './utils/gistBackup';
 import { Award, X } from 'lucide-react';
 import { BottomTabs, type TabKey } from './components/shell/BottomTabs';
@@ -387,6 +388,12 @@ export default function App() {
                 setSelectedWeek(evaluated.currentWeek || 1);
               }}
             />
+          </SubScreen>
+        );
+      case 'updates':
+        return (
+          <SubScreen title="App updates" onBack={() => setSub(null)}>
+            <UpdatesScreen />
           </SubScreen>
         );
       default:
