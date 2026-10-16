@@ -7,6 +7,7 @@ import { PROGRAM_WEEKS } from '../../data/programData';
 import { planExercise, weightStep, type ExercisePlan } from '../../utils/nextTargets';
 import { isDeloadWeek } from '../../utils/progression';
 import { applyTargetWeight, buildExerciseLog, nextPendingSet, pickDayType, updateSet } from '../../utils/workoutSession';
+import { backoffWeightFrom, heavyPartnerOf } from '../../utils/backoff';
 import { useRestCountdown } from '../../hooks/useRestCountdown';
 import { sounds } from '../../utils/audio';
 import { WarmupPyramidModal } from '../WarmupPyramidModal';
@@ -53,6 +54,29 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
   const template = dayType === 'Full Body A' ? weekPlan.workouts.dayA : weekPlan.workouts.dayB;
   const order = useMemo(() => template.exercises.map((e) => e.id), [template]);
   const defs = useMemo(() => Object.fromEntries(template.exercises.map((e) => [e.id, e])), [template]);
+  // heavy exercise id → its back-off exercise id (the back-off weight follows the heavy set)
+  const backoffOf = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const ex of template.exercises) {
+      const heavy = heavyPartnerOf(ex, template.exercises);
+      if (heavy) m[heavy.id] = ex.id;
+    }
+    return m;
+  }, [template]);
+
+  /** Set the back-off exercise to heavy − 10% unless the back-off set was already logged. */
+  const withBackoff = (
+    l: Record<string, LoggedExercise>,
+    tw: Record<string, number>,
+    heavyId: string,
+    heavyWeight: number
+  ): [Record<string, LoggedExercise>, Record<string, number>] => {
+    const backoffId = backoffOf[heavyId];
+    const log = backoffId ? l[backoffId] : undefined;
+    if (!backoffId || !log || log.sets.some((s) => !s.isWarmup && s.completed)) return [l, tw];
+    const w = backoffWeightFrom(heavyWeight, log.exerciseName || defs[backoffId].name, unit);
+    return [{ ...l, [backoffId]: applyTargetWeight(log, defs[backoffId], w, unit) }, { ...tw, [backoffId]: w }];
+  };
 
   const [logs, setLogs] = useState<Record<string, LoggedExercise>>({});
   const [targetWeights, setTargetWeights] = useState<Record<string, number>>({});
@@ -134,8 +158,10 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
       l[ex.id] = buildExerciseLog(ex, p, unit, profile.exerciseNotes?.[ex.id] || '');
       tw[ex.id] = p.targetWeight;
     }
-    setLogs(l);
-    setTargetWeights(tw);
+    let linked: [Record<string, LoggedExercise>, Record<string, number>] = [l, tw];
+    for (const heavyId of Object.keys(backoffOf)) linked = withBackoff(linked[0], linked[1], heavyId, linked[1][heavyId]);
+    setLogs(linked[0]);
+    setTargetWeights(linked[1]);
     setStartTime(Date.now());
     setDirty(false);
     setRestored(false);
@@ -179,6 +205,12 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
     let nextLogs = logs;
     if (!selectedSet.completed) {
       nextLogs = { ...logs, [selected.exerciseId]: updateSet(logs[selected.exerciseId], selected.setId, { completed: true }) };
+      if (!selectedSet.isWarmup && backoffOf[selected.exerciseId]) {
+        // Heavy set logged: the back-off set follows the weight actually lifted.
+        const [l2, tw2] = withBackoff(nextLogs, targetWeights, selected.exerciseId, selectedSet.weight);
+        nextLogs = l2;
+        setTargetWeights(tw2);
+      }
       setLogs(nextLogs);
       if (!selectedSet.isWarmup) rest.start(ex.restTimeSeconds || 120, logs[selected.exerciseId]?.exerciseName || ex.name);
       else sounds.playTick();
@@ -188,8 +220,14 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
 
   const setTarget = (exerciseId: string, weight: number) => {
     setDirty(true);
-    setTargetWeights((prev) => ({ ...prev, [exerciseId]: weight }));
-    setLogs((prev) => ({ ...prev, [exerciseId]: applyTargetWeight(prev[exerciseId], defs[exerciseId], weight, unit) }));
+    let l = { ...logs, [exerciseId]: applyTargetWeight(logs[exerciseId], defs[exerciseId], weight, unit) };
+    let tw = { ...targetWeights, [exerciseId]: weight };
+    // Before the heavy set is logged, its back-off follows the heavy target.
+    if (backoffOf[exerciseId] && !logs[exerciseId].sets.some((s) => !s.isWarmup && s.completed)) {
+      [l, tw] = withBackoff(l, tw, exerciseId, weight);
+    }
+    setLogs(l);
+    setTargetWeights(tw);
   };
 
   const swap = (exerciseId: string, name: string) => {
@@ -316,7 +354,13 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
               index={i}
               exercise={ex}
               log={logs[ex.id]}
-              plan={readOnly ? undefined : plans[ex.id]}
+              plan={
+                readOnly
+                  ? undefined
+                  : ex.isHeavyOrBackoff === 'backoff' && Object.values(backoffOf).includes(ex.id)
+                    ? { ...plans[ex.id], reason: `Heavy set − 10% → ${targetWeights[ex.id] ?? 0} ${unit}` }
+                    : plans[ex.id]
+              }
               targetWeight={targetWeights[ex.id] ?? 0}
               unit={unit}
               weightStep={weightStep(logs[ex.id].exerciseName || ex.name, unit)}
