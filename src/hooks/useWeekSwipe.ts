@@ -62,13 +62,14 @@ export function useWeekSwipe(opts: { canPrev: boolean; canNext: boolean; onStep(
     if (step === 0) return reset();
     const allowed = (step === 1 && opts.canNext) || (step === -1 && opts.canPrev);
     if (!allowed) return reset();
+    // Slide the neighbouring page fully into view, then make it the current week.
+    // It is already in place, so switching the week causes no visible jump.
     setAnimate(true);
     setOffset(-step * width);
     setTimeout(() => {
       opts.onStep(step);
       setAnimate(false);
-      setOffset(step * width);
-      requestAnimationFrame(() => requestAnimationFrame(reset));
+      setOffset(0);
     }, SLIDE_MS);
   };
 

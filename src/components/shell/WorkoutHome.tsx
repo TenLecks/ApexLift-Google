@@ -19,7 +19,8 @@ interface WorkoutHomeProps {
 
 const DAYS: DayType[] = ['Full Body A', 'Full Body B'];
 
-export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onChangeWeek, onStart, onView, onExtra, onStartNewCycle }) => {
+/** One week's page. The Workout tab shows three of these side by side for swiping. */
+const WeekPage: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onChangeWeek, onStart, onView, onExtra, onStartNewCycle }) => {
   const current = profile.currentWeek || 1;
   const status = weekStatus(profile, viewWeek);
   const plan = PROGRAM_WEEKS.find((w) => w.weekNumber === viewWeek) || PROGRAM_WEEKS[0];
@@ -35,17 +36,10 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
   useEffect(() => setUsePrevious(target.isPrevious), [target.isPrevious, current]);
   const plusOneWeek = status === 'current' ? (target.isPrevious && usePrevious ? current - 1 : current) : viewWeek;
   const countsForPrevious = status === 'current' && plusOneWeek === current - 1;
-  const swipe = useWeekSwipe({
-    canPrev: viewWeek > 1,
-    canNext: viewWeek < 12,
-    onStep: (step) => onChangeWeek(viewWeek + step),
-  });
 
   return (
-    <div {...swipe.bind} className="-mx-4 overflow-x-clip">
-    <div style={swipe.slideStyle} className="px-4">
     <div className="mx-auto max-w-[480px] space-y-3">
-      <div className="-mx-4 -mt-4 px-4 pt-3 pb-3 bg-frame">
+      <div className="-mx-4 px-4 pt-3 pb-3 bg-frame">
         <div className="rounded-xl bg-frame-2 px-3 py-2 text-center">
           <div className="font-black text-frame-ink">Week {viewWeek}</div>
           <div className="text-[10px] text-frame-muted">
@@ -191,7 +185,36 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
         ))}
       </div>
     </div>
-    </div>
+  );
+};
+
+/**
+ * Workout tab: the previous, current and next week are laid out side by side, so a swipe
+ * drags the real neighbouring page into view (no blank gap) and settles on it seamlessly.
+ */
+export const WorkoutHome: React.FC<WorkoutHomeProps> = (props) => {
+  const { viewWeek, onChangeWeek } = props;
+  const swipe = useWeekSwipe({
+    canPrev: viewWeek > 1,
+    canNext: viewWeek < 12,
+    onStep: (step) => onChangeWeek(viewWeek + step),
+  });
+  const page = (week: number) => (week >= 1 && week <= 12 ? <WeekPage {...props} viewWeek={week} /> : null);
+
+  return (
+    <div {...swipe.bind} className="-mx-4 -mt-4 overflow-clip">
+      <div style={swipe.slideStyle} className="relative">
+        {/* Keyed by week, so the neighbour that slides in is the same element after the week changes. */}
+        <div key={viewWeek - 1} className="absolute inset-y-0 right-full w-full px-4" aria-hidden="true">
+          {page(viewWeek - 1)}
+        </div>
+        <div key={viewWeek} className="px-4">
+          {page(viewWeek)}
+        </div>
+        <div key={viewWeek + 1} className="absolute inset-y-0 left-full w-full px-4" aria-hidden="true">
+          {page(viewWeek + 1)}
+        </div>
+      </div>
     </div>
   );
 };
