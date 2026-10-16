@@ -5,6 +5,7 @@ import {
   autoBackup,
   countWorkouts,
   getBackupStatus,
+  setToken,
   shouldAutoOverwrite,
   type KeyValueStore,
 } from './gistBackup';
@@ -15,7 +16,7 @@ const TOKEN = 'ghp_secret_token_123';
 
 const memStore = (init: Record<string, string> = {}): KeyValueStore => {
   const m = new Map(Object.entries(init));
-  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) };
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), removeItem: (k) => void m.delete(k) };
 };
 
 const w = (i: number): CompletedWorkoutSession => ({
@@ -112,4 +113,37 @@ await test('the backup body never contains the token', async () => {
   await autoBackup(profileWith(1), { fetchFn: fn, store });
   const write = calls.find((c) => c.method === 'PATCH')!;
   assert.equal(write.body!.includes(TOKEN), false);
+});
+
+const withIds = (ids: string[]): UserFitnessProfile => ({ ...getDefaultProfile(), completedWorkouts: ids.map((id) => ({ ...w(0), id })) });
+await test('demo data never replaces a smaller real backup (GitHub has workouts the phone lacks)', async () => {
+  const store = memStore({ apexlift_github_pat: TOKEN, apexlift_github_gist_id: 'g1' });
+  const remote = withIds(['real1', 'real2', 'real3']);
+  const local = withIds(['demo1', 'demo2', 'demo3', 'demo4', 'demo5', 'demo6', 'demo7']);
+  const { fn, calls } = fakeFetch((c) => (c.method === 'GET' ? { status: 200, json: gistWith(remote) } : { status: 200, json: { id: 'g1' } }));
+  await autoBackup(local, { fetchFn: fn, store });
+  assert.equal(calls.some((c) => c.method === 'PATCH'), false);
+  assert.ok(getBackupStatus(store).blockedReason);
+});
+await test('shouldAutoOverwrite: true when the phone has everything GitHub has, plus more', () => {
+  assert.equal(shouldAutoOverwrite(withIds(['a', 'b', 'c']), withIds(['a', 'b'])), true);
+  assert.equal(shouldAutoOverwrite(withIds(['a', 'x', 'y']), withIds(['a', 'b'])), false);
+});
+await test('a stale cached gist id (404) is cleared and the backup is found again', async () => {
+  const store = memStore({ apexlift_github_pat: TOKEN, apexlift_github_gist_id: 'gone' });
+  const { fn, calls } = fakeFetch((c) => {
+    if (c.url.endsWith('/gists/gone')) return { status: 404, json: { message: 'Not Found' } };
+    if (c.url.includes('/gists?')) return { status: 200, json: [{ id: 'g2', files: { [GIST_FILENAME]: {} } }] };
+    if (c.method === 'GET') return { status: 200, json: gistWith(withIds([])) };
+    return { status: 200, json: { id: 'g2' } };
+  });
+  await autoBackup(withIds(['a']), { fetchFn: fn, store });
+  assert.ok(calls.some((c) => c.method === 'PATCH' && c.url.endsWith('/gists/g2')));
+  assert.equal(store.getItem('apexlift_github_gist_id'), 'g2');
+  assert.equal(getBackupStatus(store).pending ?? false, false);
+});
+await test('replacing the token forgets the cached gist id', () => {
+  const store = memStore({ apexlift_github_pat: 'old', apexlift_github_gist_id: 'g1' });
+  setToken('ghp_new', { store });
+  assert.equal(store.getItem('apexlift_github_gist_id'), null);
 });

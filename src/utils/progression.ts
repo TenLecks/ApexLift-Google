@@ -149,6 +149,9 @@ export interface TargetSuggestion {
   previousSessionDate?: string;
 }
 
+export const isDeloadWeek = (week: number): boolean =>
+  Boolean(PROGRAM_WEEKS.find((w) => w.weekNumber === week)?.isDeload);
+
 export function generateSmartTarget(
   exercise: ExerciseDefinition,
   weekNumber: number,
@@ -158,7 +161,9 @@ export function generateSmartTarget(
   pastCycles?: PastCycle[]
 ): TargetSuggestion {
   const isDeload = Boolean(PROGRAM_WEEKS.find((w) => w.weekNumber === weekNumber)?.isDeload);
-  const plan = planExercise({ exercise, weekNumber, isDeload, unit, chosenSubstitution, workouts: allWorkouts, pastCycles });
+  const plan = planExercise({
+    exercise, weekNumber, isDeload, unit, chosenSubstitution, workouts: allWorkouts, pastCycles, isDeloadWeek,
+  });
   return {
     suggestedWeight: plan.targetWeight,
     suggestedRepsMin: plan.sets[0].reps,

@@ -36,6 +36,8 @@ export interface PlanExerciseArgs {
   workouts: CompletedWorkoutSession[];
   pastCycles?: PastCycle[];
   manualTarget?: WeeklyExerciseTarget;
+  /** Deload weeks are skipped as history (their lighter numbers are not a baseline). */
+  isDeloadWeek?: (week: number) => boolean;
 }
 
 const MAJOR_MUSCLES: MuscleGroup[] = ['Chest', 'Back / Lats', 'Quads', 'Hamstrings', 'Glutes'];
@@ -75,6 +77,7 @@ interface LastSession {
   sets: LoggedSet[];
   date: string;
   pastCycleNumber?: number;
+  fromDeload?: boolean;
 }
 
 function workingSetsOf(ex: LoggedExercise): LoggedSet[] {
@@ -85,13 +88,18 @@ function findInSessions(
   sessions: CompletedWorkoutSession[],
   exerciseId: string,
   sub: string | undefined,
-  maxWeek: number
-): { sets: LoggedSet[]; date: string } | null {
-  for (let w = maxWeek; w >= 1; w--) {
-    for (const s of sessions.filter((x) => x.weekNumber === w)) {
-      const match = s.exercises.find((e) => e.exerciseId === exerciseId && sameSubstitution(e.chosenSubstitution, sub));
-      const sets = match ? workingSetsOf(match) : [];
-      if (sets.length > 0) return { sets, date: s.dateCompleted };
+  maxWeek: number,
+  isDeloadWeek: (week: number) => boolean
+): LastSession | null {
+  // Prefer the latest normal week; fall back to a deload week only if that is all there is.
+  for (const allowDeload of [false, true]) {
+    for (let w = maxWeek; w >= 1; w--) {
+      if (isDeloadWeek(w) !== allowDeload) continue;
+      for (const s of sessions.filter((x) => x.weekNumber === w)) {
+        const match = s.exercises.find((e) => e.exerciseId === exerciseId && sameSubstitution(e.chosenSubstitution, sub));
+        const sets = match ? workingSetsOf(match) : [];
+        if (sets.length > 0) return { sets, date: s.dateCompleted, fromDeload: allowDeload };
+      }
     }
   }
   return null;
@@ -99,11 +107,12 @@ function findInSessions(
 
 function findLastSession(args: PlanExerciseArgs): LastSession | null {
   const { exercise, weekNumber, chosenSubstitution, workouts, pastCycles } = args;
-  const current = findInSessions(workouts, exercise.id, chosenSubstitution, weekNumber - 1);
+  const isDeloadWeek = args.isDeloadWeek ?? (() => false);
+  const current = findInSessions(workouts, exercise.id, chosenSubstitution, weekNumber - 1, isDeloadWeek);
   if (current) return current;
   for (let i = (pastCycles?.length ?? 0) - 1; i >= 0; i--) {
     const cycle = pastCycles![i];
-    const found = findInSessions(cycle.completedWorkouts, exercise.id, chosenSubstitution, 12);
+    const found = findInSessions(cycle.completedWorkouts, exercise.id, chosenSubstitution, 12, isDeloadWeek);
     if (found) return { ...found, pastCycleNumber: cycle.cycleNumber };
   }
   return null;
@@ -188,9 +197,18 @@ export function planExercise(args: PlanExerciseArgs): ExercisePlan {
     const base = ex.isHeavyOrBackoff === 'heavy' ? (unit === 'kg' ? 30 : 65) : unit === 'kg' ? 22.5 : 50;
     return uniform(roundToStep(base, step), ex.minReps, T, 'First time — calibrate today with your warm-ups', true);
   }
+  // Undo a deload's ~10% reduction when a deload session is the only reference.
+  const undoDeload = (w: number) => (last.fromDeload ? roundToStep(w / 0.9, step) : w);
+  const deloadOf = (w: number) => Math.max(step, Math.min(roundToStep(w * 0.9, step), w - step));
+
   if (last.pastCycleNumber !== undefined) {
-    const top = topSetOf(last.sets);
-    return uniform(top.weight, ex.minReps, T, `Cycle ${last.pastCycleNumber} final weight — ${top.weight} ${unit}`, false);
+    const base = undoDeload(topSetOf(last.sets).weight);
+    if (isDeload) return uniform(deloadOf(base), ex.minReps, T - 2, `Deload week — ${deloadOf(base)} ${unit}`, false);
+    return uniform(base, ex.minReps, T, `Cycle ${last.pastCycleNumber} final weight — ${base} ${unit}`, false);
+  }
+  if (last.fromDeload && !isDeload) {
+    const base = undoDeload(topSetOf(last.sets).weight);
+    return uniform(base, ex.minReps, T, `Back from deload — ${base} ${unit}`, false);
   }
 
   const straight = last.sets.filter((s) => !isTechniqueSet(s));

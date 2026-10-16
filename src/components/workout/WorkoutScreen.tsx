@@ -4,6 +4,7 @@ import { ChevronLeft, Flag, MoreVertical, RotateCcw, ArrowRightLeft, Info } from
 import type { CompletedWorkoutSession, LoggedExercise, LoggedSet, UserFitnessProfile } from '../../types/workout';
 import { PROGRAM_WEEKS } from '../../data/programData';
 import { planExercise, weightStep, type ExercisePlan } from '../../utils/nextTargets';
+import { isDeloadWeek } from '../../utils/progression';
 import { applyTargetWeight, buildExerciseLog, nextPendingSet, updateSet } from '../../utils/workoutSession';
 import { useRestCountdown } from '../../hooks/useRestCountdown';
 import { sounds } from '../../utils/audio';
@@ -83,6 +84,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
       workouts: profile.completedWorkouts,
       pastCycles: profile.pastCycles,
       manualTarget: profile.weeklyTargets[`${selectedWeek}_${exerciseId}`],
+      isDeloadWeek,
     });
 
   const plans = useMemo(

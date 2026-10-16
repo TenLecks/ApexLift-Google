@@ -10,7 +10,13 @@ const GIST_ID_KEY = 'apexlift_github_gist_id';
 const STATUS_KEY = 'apexlift_backup_status';
 const API = 'https://api.github.com';
 
-export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem'>;
+export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+class GitHubError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
 
 export interface BackupStatus {
   lastSuccessAt?: string;
@@ -29,7 +35,11 @@ const storeOf = (o?: Opts): KeyValueStore => o?.store ?? globalThis.localStorage
 const fetchOf = (o?: Opts): typeof fetch => o?.fetchFn ?? globalThis.fetch.bind(globalThis);
 
 export const getToken = (o?: Opts) => storeOf(o).getItem(TOKEN_KEY)?.trim() || null;
-export const setToken = (token: string, o?: Opts) => storeOf(o).setItem(TOKEN_KEY, token.trim());
+export const setToken = (token: string, o?: Opts) => {
+  const store = storeOf(o);
+  store.setItem(TOKEN_KEY, token.trim());
+  store.removeItem(GIST_ID_KEY); // a new token may belong to another account
+};
 
 export function getBackupStatus(store: KeyValueStore = globalThis.localStorage): BackupStatus {
   try {
@@ -48,8 +58,20 @@ export function countWorkouts(p: UserFitnessProfile): number {
   return p.completedWorkouts.length + p.bonusSessions.length + past;
 }
 
+function workoutIds(p: UserFitnessProfile): string[] {
+  const cycles = p.pastCycles ?? [];
+  return [
+    ...(p.completedWorkouts ?? []),
+    ...(p.bonusSessions ?? []),
+    ...cycles.flatMap((c) => [...c.completedWorkouts, ...c.bonusSessions]),
+  ].map((x) => x.id);
+}
+
+/** Only overwrite automatically when the phone already has everything the backup has. */
 export function shouldAutoOverwrite(local: UserFitnessProfile, remote: UserFitnessProfile | null): boolean {
-  return remote === null || countWorkouts(local) >= countWorkouts(remote);
+  if (remote === null) return true;
+  const mine = new Set(workoutIds(local));
+  return countWorkouts(local) >= countWorkouts(remote) && workoutIds(remote).every((id) => mine.has(id));
 }
 
 async function gh(fetchFn: typeof fetch, token: string, path: string, init: RequestInit = {}) {
@@ -63,7 +85,7 @@ async function gh(fetchFn: typeof fetch, token: string, path: string, init: Requ
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(`GitHub ${res.status}${body.message ? `: ${body.message}` : ''}`);
+    throw new GitHubError(res.status, `GitHub ${res.status}${body.message ? `: ${body.message}` : ''}`);
   }
   return res.json();
 }
@@ -124,14 +146,25 @@ export async function autoBackup(profile: UserFitnessProfile, o: Opts & { force?
   if (!token) return prev;
   try {
     let gistId = await resolveGistId(token, store, fetchFn);
+    let remote: Awaited<ReturnType<typeof readBackup>> = null;
+    if (gistId) {
+      try {
+        remote = await readBackup(token, gistId, fetchFn);
+      } catch (e) {
+        if (!(e instanceof GitHubError && e.status === 404)) throw e;
+        // Cached gist is gone (deleted, typed by hand, other account): look it up again.
+        store.removeItem(GIST_ID_KEY);
+        gistId = await resolveGistId(token, store, fetchFn);
+        remote = gistId ? await readBackup(token, gistId, fetchFn) : null;
+      }
+    }
     if (gistId && !o.force) {
-      const remote = await readBackup(token, gistId, fetchFn);
       if (remote && !shouldAutoOverwrite(profile, remote.profile)) {
         const s: BackupStatus = {
           ...prev,
           pending: false,
           remoteCount: countWorkouts(remote.profile),
-          blockedReason: 'Backup on GitHub has more workouts than this phone — restore or overwrite?',
+          blockedReason: 'Backup on GitHub has more workouts, or ones this phone doesn’t have — restore or overwrite?',
         };
         setStatus(store, s);
         return s;

@@ -121,3 +121,34 @@ await test('classifyExercise and targetRpeOf', () => {
   assert.equal(weightStep('Romanian Deadlift', 'kg'), 2.5);
   assert.equal(weightStep('Flat DB Press', 'lbs'), 5);
 });
+
+const deload5or12 = (w: number) => w === 5 || w === 12;
+const at = (ex: ExerciseDefinition, week: number, sets: LoggedSet[]) => session(ex, sets, week);
+await test('week after a deload progresses from the last normal week, not the deload', () => {
+  const p = planExercise({
+    exercise: rdl, weekNumber: 6, isDeload: false, unit: 'kg', isDeloadWeek: deload5or12,
+    workouts: [at(rdl, 4, [set(80, 9, 9)]), at(rdl, 5, [set(72.5, 8, 7)])],
+  });
+  assert.deepEqual(firstSet(p), { weight: 80, reps: 10 });
+});
+await test('only history is a deload week → back up to the pre-deload weight', () => {
+  const p = planExercise({
+    exercise: rdl, weekNumber: 6, isDeload: false, unit: 'kg', isDeloadWeek: deload5or12,
+    workouts: [at(rdl, 5, [set(72, 8, 7)])],
+  });
+  assert.deepEqual(firstSet(p), { weight: 80, reps: 8 });
+});
+await test('a deload week planned from a past cycle is still reduced', () => {
+  const p = planExercise({
+    exercise: rdl, weekNumber: 5, isDeload: true, unit: 'kg', isDeloadWeek: deload5or12, workouts: [],
+    pastCycles: [{ cycleNumber: 1, startDate: '', endDate: '', completedWorkouts: [at(rdl, 8, [set(80, 10, 9)])], bonusSessions: [] }],
+  });
+  assert.deepEqual({ ...firstSet(p), rpe: p.sets[0].rpe }, { weight: 72.5, reps: 8, rpe: 7 });
+});
+await test('a past-cycle baseline skips that cycle’s deload week', () => {
+  const p = planExercise({
+    exercise: rdl, weekNumber: 9, isDeload: false, unit: 'kg', isDeloadWeek: deload5or12, workouts: [],
+    pastCycles: [{ cycleNumber: 1, startDate: '', endDate: '', completedWorkouts: [at(rdl, 11, [set(80, 10, 9)]), at(rdl, 12, [set(72.5, 8, 7)])], bonusSessions: [] }],
+  });
+  assert.equal(p.targetWeight, 80);
+});
