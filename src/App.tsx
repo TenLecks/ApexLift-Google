@@ -383,7 +383,7 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500 selection:text-zinc-950">
       <main
         className={`w-full mx-auto px-4 pt-2 ${
-          inWorkout ? 'max-w-[480px]' : 'max-w-5xl pb-[calc(5rem+env(safe-area-inset-bottom))]'
+          inWorkout ? 'max-w-[480px]' : 'max-w-5xl pb-[calc(3.75rem+env(safe-area-inset-bottom))]'
         }`}
       >
         {inWorkout ? (

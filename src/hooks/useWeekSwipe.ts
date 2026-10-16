@@ -86,7 +86,10 @@ export function useWeekSwipe(opts: { canPrev: boolean; canNext: boolean; onStep(
           suppressClick.current = false;
         }
       },
-      style: { touchAction: 'pan-y' } as React.CSSProperties,
+      // Fill the screen down to the tab bar, so a swipe on empty space below short pages
+      // (finished / future weeks) still counts. 3.75rem = the main area's bottom padding,
+      // which matches the tab bar's height.
+      style: { touchAction: 'pan-y', minHeight: 'calc(100dvh - 3.75rem - env(safe-area-inset-bottom))' } as React.CSSProperties,
     },
     slideStyle: {
       transform: `translateX(${offset}px)`,
