@@ -161,7 +161,8 @@ export interface UserFitnessProfile {
     dayType: 'Full Body A' | 'Full Body B';
     startedAt: string;
     exercises: LoggedExercise[];
-    baseWorkingWeights?: Record<string, number>;
+    baseWorkingWeights?: Record<string, number>; // legacy drafts; superseded by targetWeights
+    targetWeights?: Record<string, number>; // per-exercise Target weight (spec §3)
     hasWeightChanged?: boolean;
   } | null;
   exerciseNotes?: Record<string, string>; // persistent per-exercise notes by exerciseId

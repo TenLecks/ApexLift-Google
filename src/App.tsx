@@ -15,6 +15,7 @@ import {
   getDefaultProfile,
 } from './utils/storage';
 import { convertWeight } from './utils/progression';
+import { convertDraftUnits } from './utils/workoutSession';
 import { Navbar } from './components/Navbar';
 import { RoadmapView } from './components/RoadmapView';
 import { WorkoutView } from './components/WorkoutView';
@@ -95,27 +96,9 @@ export default function App() {
       });
 
       // 4. Convert activeWorkoutDraft
-      let convertedDraft = prev.activeWorkoutDraft;
-      if (convertedDraft) {
-        const convertedBaseWeights: Record<string, number> = {};
-        if (convertedDraft.baseWorkingWeights) {
-          Object.entries(convertedDraft.baseWorkingWeights).forEach(([exId, w]) => {
-            convertedBaseWeights[exId] = w > 0 ? convertWeight(w, fromUnit, toUnit) : w;
-          });
-        }
-
-        convertedDraft = {
-          ...convertedDraft,
-          exercises: convertedDraft.exercises.map((ex) => ({
-            ...ex,
-            sets: ex.sets.map((s) => ({
-              ...s,
-              weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
-            })),
-          })),
-          baseWorkingWeights: convertedDraft.baseWorkingWeights ? convertedBaseWeights : undefined,
-        };
-      }
+      const convertedDraft = prev.activeWorkoutDraft
+        ? convertDraftUnits(prev.activeWorkoutDraft, fromUnit, toUnit)
+        : prev.activeWorkoutDraft;
 
       const updated: UserFitnessProfile = {
         ...prev,
