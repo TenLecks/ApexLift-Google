@@ -63,7 +63,8 @@ Layout, top to bottom:
   - While resting, the panel shows the countdown with −30 / +30 / skip; the Log button stays usable (logging early restarts the timer).
   - Editing a logged set (tapped from the list) shows **Save** instead of Log and does not start the timer.
 - Steps: weight 2 kg for dumbbells, 2.5 kg otherwise (lbs: 5); reps 1; RPE 0.5 (range 5–10). RIR stays derived/stored as today.
-- Changing the working weight of a set re-derives that exercise's warm-up weights (existing `calculateWarmupPyramid`), only for warm-ups not yet logged.
+- Warm-up / target weight interaction: see §3 "Target weight vs. set weight".
+- **Warm-up RPE bug (verified):** warm-ups are saved at RPE 5 / 6.5 / 7.5, but today's RPE `<select>` only has options 10, 9.5, 9, 8.5, 8, 7, 6, so a non-matching value renders as its first option, "RPE 10". The panel's − / + RPE control replaces every RPE `<select>`; the displayed value must always equal the stored value. New warm-ups pre-fill RPE 5, 6, 7 (1st, 2nd, 3rd+). Warm-ups never feed progression, badges (e.g. "RIR Zero Club") or volume — keep the existing `!isWarmup` filters.
 - Remove: the three-mode switcher, "Automatic Calculations" banner, big week/day title card, separate floating `RestTimer` card (timer lives in the panel; reuse its timestamp logic).
 
 ## 2. App structure (decided)
@@ -97,7 +98,11 @@ Per working set (set k of next session is based on set k of last session; if las
 
 (My call) **Intensity-technique sets** (`lastSetTechnique`: dropset, myo-reps, partials…): logged in the same panel as weight / reps / RPE, where reps = the main straight-set reps before the technique; the technique stays a label (`intensityTechniqueApplied`). They are excluded as progression *inputs*; the technique set's next target copies the target of the straight set before it.
 
-(My call) **Changing a weight in the panel**: when the owner changes the weight of an unlogged working set, the other *unlogged* working sets of that exercise follow (and unlogged warm-ups re-derive); logged sets never change. Reps/RPE edits stay per set.
+**Target weight vs. set weight (decided by owner):**
+- Each exercise has a **Target weight**, shown with − / + in the expanded exercise header. It is pre-filled from progression (the top working set's target) or a manual Weekly target.
+- Changing the **Target weight** sets **every unlogged working set** of that exercise to exactly that weight (not a shift — all become the target), and re-derives every **unlogged warm-up** from it. Logged sets never change.
+- Changing the weight of **one set in the panel changes only that set** — warm-ups included (e.g. doing a warm-up heavier/lighter than suggested) — and never touches the target or other sets. Example: target 80, set 1 done at 82.5 → set 2 stays 80.
+- Reps / RPE edits are always per set.
 
 Rounding: to the gym step (2 kg dumbbells, 2.5 kg other; lbs 5). Missing RPE on a set → treat as on target.
 Priority: a manual target in Weekly targets (`weeklyTargets[week_exerciseId]`) overrides everything. First time an exercise is done → existing baseline behaviour.
