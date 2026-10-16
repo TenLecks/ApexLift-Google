@@ -246,12 +246,12 @@ export const ProgressVisualizationView: React.FC<ProgressVisualizationViewProps>
           </div>
 
           {/* Exercise Selector */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
             <span className="text-xs text-zinc-400 font-semibold">Lift:</span>
             <select
               value={selectedLiftKey}
               onChange={(e) => setSelectedLiftKey(e.target.value)}
-              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs font-bold text-sky-300 focus:outline-none cursor-pointer max-w-xs truncate"
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs font-bold text-sky-300 focus:outline-none cursor-pointer min-w-0 flex-1 sm:flex-none sm:max-w-xs truncate"
             >
               {selectableLifts.map((lift) => (
                 <option key={lift.key} value={lift.key}>

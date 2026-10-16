@@ -16,7 +16,6 @@ import {
 } from './utils/storage';
 import { convertWeight } from './utils/progression';
 import { convertDraftUnits } from './utils/workoutSession';
-import { Navbar } from './components/Navbar';
 import { RoadmapView } from './components/RoadmapView';
 import { WorkoutScreen } from './components/workout/WorkoutScreen';
 import { WeeklyTargetsView } from './components/WeeklyTargetsView';
@@ -25,21 +24,28 @@ import { BadgesView } from './components/BadgesView';
 import { AdaptiveBonusModal } from './components/AdaptiveBonusModal';
 import { RirGuideModal } from './components/RirGuideModal';
 import { CloudBackupModal } from './components/CloudBackupModal';
-import { Award, CheckCircle2, Dumbbell, Flame, Sparkles, X } from 'lucide-react';
+import { Award, X } from 'lucide-react';
+import { BottomTabs, type TabKey } from './components/shell/BottomTabs';
+import { SubScreen } from './components/shell/SubScreen';
+import { WorkoutHome } from './components/shell/WorkoutHome';
+import { StatsScreen } from './components/shell/StatsScreen';
+import { MoreScreen, type SubKey } from './components/shell/MoreScreen';
 
 export default function App() {
   const [profile, setProfile] = useState<UserFitnessProfile>(() => loadUserProfile());
   const [selectedWeek, setSelectedWeek] = useState<number>(
     profile.activeWorkoutDraft?.weekNumber || profile.currentWeek || 1
   );
-  const [currentTab, setCurrentTab] = useState<
-    'roadmap' | 'workout' | 'bonus' | 'targets' | 'analytics' | 'badges'
-  >('roadmap');
+  const [tab, setTab] = useState<TabKey>('workout');
+  const [sub, setSub] = useState<SubKey | null>(null);
+  const [inWorkout, setInWorkout] = useState(false);
+  const [workoutDay, setWorkoutDay] = useState<'Full Body A' | 'Full Body B'>(
+    profile.activeWorkoutDraft?.dayType ?? 'Full Body A'
+  );
 
   // Modals state
   const [isRirGuideOpen, setIsRirGuideOpen] = useState<boolean>(false);
   const [isAdaptiveBonusOpen, setIsAdaptiveBonusOpen] = useState<boolean>(false);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState<boolean>(false);
   const [adaptiveBonusWeek, setAdaptiveBonusWeek] = useState<number>(selectedWeek);
 
   // Unlocked badge alert toast
@@ -212,7 +218,9 @@ export default function App() {
       handleUpdateDraft(null);
     }
     setSelectedWeek(week);
-    setCurrentTab('workout');
+    setWorkoutDay(dayType);
+    setSub(null);
+    setInWorkout(true);
   };
 
   const handleUpdateExerciseNote = (exerciseId: string, note: string) => {
@@ -298,146 +306,136 @@ export default function App() {
     setIsAdaptiveBonusOpen(true);
   };
 
+  const startWorkoutFromHome = (week: number, dayType: 'Full Body A' | 'Full Body B') => {
+    setSelectedWeek(week);
+    setWorkoutDay(dayType);
+    setInWorkout(true);
+  };
+
+  const openExtra = (week: number) => {
+    setAdaptiveBonusWeek(week);
+    setIsAdaptiveBonusOpen(true);
+  };
+
+  const renderSub = () => {
+    switch (sub) {
+      case 'roadmap':
+        return (
+          <SubScreen title="12-week roadmap" onBack={() => setSub(null)}>
+            <RoadmapView
+              profile={profile}
+              selectedWeek={selectedWeek}
+              onSelectWeek={handleSelectWeek}
+              onStartWorkout={handleStartWorkout}
+              onOpenAdaptiveBonus={handleOpenBonusFromRoadmap}
+              onToggleSkipWeek={handleToggleSkipWeek}
+              onStartNewCycle={handleStartNewCycle}
+            />
+          </SubScreen>
+        );
+      case 'targets':
+        return (
+          <SubScreen
+            title="Weekly targets"
+            onBack={() => setSub(null)}
+            right={
+              <select
+                aria-label="Week"
+                value={selectedWeek}
+                onChange={(e) => handleSelectWeek(Number(e.target.value))}
+                className="rounded-lg bg-zinc-900 border border-zinc-700 px-2 py-1 text-sm text-white"
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    Week {i + 1}
+                  </option>
+                ))}
+              </select>
+            }
+          >
+            <WeeklyTargetsView profile={profile} selectedWeek={selectedWeek} onSaveTargets={handleSaveTargets} />
+          </SubScreen>
+        );
+      case 'badges':
+        return (
+          <SubScreen title="Badges & trophies" onBack={() => setSub(null)}>
+            <BadgesView profile={profile} />
+          </SubScreen>
+        );
+      case 'backup':
+        return (
+          <SubScreen title="Back up / Restore" onBack={() => setSub(null)}>
+            <CloudBackupModal
+              isOpen
+              onClose={() => setSub(null)}
+              profile={profile}
+              onRestoreProfile={(restored) => {
+                setProfile(restored);
+                setSelectedWeek(restored.currentWeek || 1);
+              }}
+            />
+          </SubScreen>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-zinc-950">
-      {/* Navigation Header */}
-      <Navbar
-        currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
-        profile={profile}
-        selectedWeek={selectedWeek}
-        setSelectedWeek={handleSelectWeek}
-        onToggleUnit={handleToggleUnit}
-        onOpenRirGuide={() => setIsRirGuideOpen(true)}
-        onOpenAdaptiveBonus={() => {
-          setAdaptiveBonusWeek(selectedWeek);
-          setIsAdaptiveBonusOpen(true);
-        }}
-        onOpenBackup={() => setIsBackupModalOpen(true)}
-        onLoadDemoData={handleLoadDemoData}
-        onResetData={handleResetData}
-        onToggleSkipWeek={handleToggleSkipWeek}
-      />
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:py-8">
-        {currentTab === 'roadmap' && (
-          <RoadmapView
-            profile={profile}
-            selectedWeek={selectedWeek}
-            onSelectWeek={handleSelectWeek}
-            onStartWorkout={handleStartWorkout}
-            onOpenAdaptiveBonus={handleOpenBonusFromRoadmap}
-            onToggleSkipWeek={handleToggleSkipWeek}
-            onStartNewCycle={handleStartNewCycle}
-          />
-        )}
-
-        {currentTab === 'workout' && (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500 selection:text-zinc-950">
+      <main
+        className={`w-full mx-auto px-4 pt-2 ${
+          inWorkout ? 'max-w-[480px]' : 'max-w-5xl pb-[calc(5rem+env(safe-area-inset-bottom))]'
+        }`}
+      >
+        {inWorkout ? (
           <WorkoutScreen
+            key={`${selectedWeek}-${workoutDay}`}
             profile={profile}
             selectedWeek={selectedWeek}
+            initialDayType={workoutDay}
             onFinishWorkout={handleFinishWorkout}
             onOpenRirGuide={() => setIsRirGuideOpen(true)}
             onUpdateDraft={handleUpdateDraft}
             onUpdateExerciseNote={handleUpdateExerciseNote}
+            onExit={() => setInWorkout(false)}
           />
-        )}
-
-        {currentTab === 'bonus' && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-r from-teal-950/60 to-emerald-950/60 border border-teal-500/30 rounded-3xl p-6 sm:p-8 shadow-xl">
-              <div className="max-w-2xl space-y-3">
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                  Adaptive +1 Scheduler Engine
-                </span>
-                <h1 className="text-3xl font-black text-white">
-                  Dynamic Schedule Adaptation
-                </h1>
-                <p className="text-sm text-zinc-300 leading-relaxed">
-                  Your baseline schedule is 2x/week (Full Body A & B). When your calendar opens up to squeeze
-                  an extra workout, launch the test below. The engine detects your systemic fatigue & DOMS to
-                  seamlessly prescribe Yoga, Zone 2 Cardio, or Weak-Point Hypertrophy—and credits the volume directly to
-                  your weekly muscle group targets!
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      setAdaptiveBonusWeek(selectedWeek);
-                      setIsAdaptiveBonusOpen(true);
-                    }}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-zinc-950 font-bold text-sm shadow-md transition active:scale-95 flex items-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Run 30-Second Autoregulation Test</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* List of previously logged bonus sessions */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-md space-y-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Flame className="w-5 h-5 text-teal-400" />
-                <span>Logged Bonus Workouts ({profile.bonusSessions.length})</span>
-              </h2>
-
-              {profile.bonusSessions.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {profile.bonusSessions.map((b) => (
-                    <div
-                      key={b.id}
-                      className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-teal-400">
-                            Week {b.weekNumber}
-                          </span>
-                          <h3 className="font-bold text-sm text-white">{b.title}</h3>
-                        </div>
-                        <p className="text-xs text-zinc-400">
-                          {b.durationMinutes} mins • Added sets to:{' '}
-                          {b.addedVolumeMuscles.map((m) => `${m.muscle} (+${m.sets})`).join(', ')}
-                        </p>
-                        <span className="text-[11px] text-zinc-500 font-mono">
-                          {new Date(b.date).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-teal-500/10 text-teal-300 border border-teal-500/20">
-                        {b.type.replace('_', ' ')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 text-zinc-500 text-sm">
-                  No bonus sessions logged yet. Squeeze an extra session whenever you have time!
-                </div>
-              )}
-            </div>
+        ) : sub ? (
+          renderSub()
+        ) : tab === 'workout' ? (
+          <div className="pt-2">
+            <WorkoutHome profile={profile} onStart={startWorkoutFromHome} onExtra={openExtra} />
+          </div>
+        ) : tab === 'stats' ? (
+          <div className="pt-2">
+            <StatsScreen profile={profile} selectedWeek={profile.currentWeek || selectedWeek} />
+          </div>
+        ) : (
+          <div className="pt-2">
+            <MoreScreen
+              unit={profile.weightUnit}
+              onOpen={setSub}
+              onOpenRirGuide={() => setIsRirGuideOpen(true)}
+              onToggleUnit={handleToggleUnit}
+              onLoadDemo={handleLoadDemoData}
+              onReset={handleResetData}
+            />
           </div>
         )}
-
-        {currentTab === 'targets' && (
-          <WeeklyTargetsView
-            profile={profile}
-            selectedWeek={selectedWeek}
-            onSaveTargets={handleSaveTargets}
-          />
-        )}
-
-        {currentTab === 'analytics' && (
-          <ProgressVisualizationView profile={profile} selectedWeek={selectedWeek} />
-        )}
-
-        {currentTab === 'badges' && <BadgesView profile={profile} />}
       </main>
 
-      {/* RIR Guide Modal */}
+      {!inWorkout && (
+        <BottomTabs
+          current={tab}
+          onChange={(t) => {
+            setSub(null);
+            setTab(t);
+          }}
+        />
+      )}
+
       <RirGuideModal isOpen={isRirGuideOpen} onClose={() => setIsRirGuideOpen(false)} />
 
-      {/* Adaptive Bonus Modal */}
       <AdaptiveBonusModal
         isOpen={isAdaptiveBonusOpen}
         onClose={() => setIsAdaptiveBonusOpen(false)}
@@ -445,50 +443,21 @@ export default function App() {
         onSaveBonusSession={handleSaveBonusSession}
       />
 
-      {/* Cloud & Backup Hub Modal */}
-      <CloudBackupModal
-        isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        profile={profile}
-        onRestoreProfile={(restored) => {
-          setProfile(restored);
-          setSelectedWeek(restored.currentWeek || 1);
-        }}
-      />
-
-      {/* Badge Unlock Toast Notification */}
       {badgeToast && (
-        <div className="fixed top-20 right-4 z-50 max-w-sm bg-gradient-to-r from-amber-500 to-yellow-600 text-zinc-950 p-4 rounded-2xl shadow-2xl flex items-start gap-3 animate-bounce">
+        <div className="fixed top-4 inset-x-4 mx-auto z-50 max-w-sm bg-gradient-to-r from-amber-500 to-yellow-600 text-zinc-950 p-4 rounded-2xl shadow-2xl flex items-start gap-3">
           <div className="p-2 rounded-xl bg-black/10">
             <Award className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div className="flex-1">
-            <span className="text-[11px] font-black uppercase tracking-wider block opacity-80">
-              Badge Unlocked! (+100 XP)
-            </span>
+            <span className="text-[11px] font-black uppercase tracking-wider block opacity-80">Badge Unlocked! (+100 XP)</span>
             <div className="font-black text-sm">{badgeToast.title}</div>
             <p className="text-xs mt-0.5 opacity-90">{badgeToast.description}</p>
           </div>
-          <button
-            onClick={() => setBadgeToast(null)}
-            className="p-1 rounded-lg hover:bg-black/10 transition"
-          >
+          <button onClick={() => setBadgeToast(null)} className="p-1 rounded-lg hover:bg-black/10 transition">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
-
-      {/* Footer */}
-      <footer className="border-t border-zinc-900 bg-zinc-950/80 py-6 text-center text-xs text-zinc-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Dumbbell className="w-4 h-4 text-emerald-500" />
-            <span className="text-zinc-400 font-semibold">ApexLift</span>
-            <span>— Evidence-Based Hypertrophy & Progressive Overload Architecture</span>
-          </div>
-          <div>Weekly Consistency Streak & Scientific Autoregulation Engine</div>
-        </div>
-      </footer>
     </div>
   );
 }
