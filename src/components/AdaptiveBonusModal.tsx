@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { YOGA_CLASS_MINUTES, yogaClassLog } from '../utils/yogaClass';
 import { useBackHandler } from '../hooks/useBackHandler';
 import {
   X,
@@ -45,6 +46,7 @@ export const AdaptiveBonusModal: React.FC<AdaptiveBonusModalProps> = ({
   const [stepTimerSeconds, setStepTimerSeconds] = useState<number>(0);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
+  const [yogaMinutes, setYogaMinutes] = useState<number>(60);
 
   useBackHandler(isOpen, onClose);
   if (!isOpen) return null;
@@ -83,6 +85,13 @@ export const AdaptiveBonusModal: React.FC<AdaptiveBonusModalProps> = ({
     } else {
       handleCompleteSession();
     }
+  };
+
+  const handleLogYogaClass = () => {
+    onSaveBonusSession(yogaClassLog(weekNumber, yogaMinutes));
+    sounds.playVictoryFanfare();
+    confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+    onClose();
   };
 
   const handleCompleteSession = () => {
@@ -158,6 +167,37 @@ export const AdaptiveBonusModal: React.FC<AdaptiveBonusModalProps> = ({
         ) : !activePresetKey ? (
           /* Step 1: Readiness Questionnaire */
           <div className="mt-5 space-y-6">
+            {/* Quick log: a yoga class attended outside the app */}
+            <div className="rounded-xl border border-purple-500/40 bg-purple-500/10 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-100">
+                <HeartHandshake className="w-4 h-4 text-purple-400" />
+                <span>Went to a yoga class?</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {YOGA_CLASS_MINUTES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setYogaMinutes(m)}
+                    className={`h-10 rounded-lg text-sm font-semibold border ${
+                      yogaMinutes === m
+                        ? 'border-purple-400 bg-purple-500/20 text-purple-300'
+                        : 'border-zinc-700 bg-zinc-900 text-zinc-300'
+                    }`}
+                  >
+                    {m} min
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleLogYogaClass}
+                className="w-full h-11 rounded-xl bg-purple-500 text-zinc-950 font-bold"
+              >
+                Save yoga class · Week {weekNumber}
+              </button>
+            </div>
+
             <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
                 <Sliders className="w-4 h-4 text-teal-400" />
