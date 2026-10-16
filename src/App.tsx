@@ -42,6 +42,8 @@ export default function App() {
   const [tab, setTab] = useState<TabKey>('workout');
   const [sub, setSub] = useState<SubKey | null>(null);
   const [inWorkout, setInWorkout] = useState(false);
+  // Week shown on the Workout tab; snaps back to the current week (spec: week switcher).
+  const [viewWeek, setViewWeek] = useState<number>(profile.currentWeek || 1);
   const [workoutDay, setWorkoutDay] = useState<'Full Body A' | 'Full Body B'>(
     profile.activeWorkoutDraft?.dayType ?? 'Full Body A'
   );
@@ -61,6 +63,15 @@ export default function App() {
   // Retry a backup that failed (e.g. offline at the gym) on start and when back online.
   const profileRef = useRef(profile);
   profileRef.current = profile;
+
+  useEffect(() => setViewWeek(profile.currentWeek || 1), [profile.currentWeek, profile.completedWorkouts.length]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) setViewWeek(profileRef.current.currentWeek || 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
   useEffect(() => {
     const retry = () => void retryPendingBackup(() => profileRef.current);
     retry();
@@ -321,6 +332,14 @@ export default function App() {
     setIsAdaptiveBonusOpen(true);
   };
 
+  // Opening a finished workout to look at it never touches an in-progress draft.
+  const viewWorkout = (week: number, dayType: 'Full Body A' | 'Full Body B') => {
+    setSelectedWeek(week);
+    setWorkoutDay(dayType);
+    setSub(null);
+    setInWorkout(true);
+  };
+
   // Same confirmation as the roadmap when another day's draft has progress.
   const startWorkoutFromHome = (week: number, dayType: 'Full Body A' | 'Full Body B') => handleStartWorkout(week, dayType);
 
@@ -421,7 +440,15 @@ export default function App() {
           renderSub()
         ) : tab === 'workout' ? (
           <div className="pt-2">
-            <WorkoutHome profile={profile} onStart={startWorkoutFromHome} onExtra={openExtra} onStartNewCycle={handleStartNewCycle} />
+            <WorkoutHome
+              profile={profile}
+              viewWeek={viewWeek}
+              onChangeWeek={setViewWeek}
+              onStart={startWorkoutFromHome}
+              onView={viewWorkout}
+              onExtra={openExtra}
+              onStartNewCycle={handleStartNewCycle}
+            />
           </div>
         ) : tab === 'stats' ? (
           <div className="pt-2">

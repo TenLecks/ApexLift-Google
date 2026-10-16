@@ -21,3 +21,64 @@ export function estimateMinutes(t: DayWorkoutTemplate): number {
   );
   return Math.max(5, Math.round(minutes / 5) * 5);
 }
+
+// --- Week switcher + "+1 counts for which week" (Sun–Sat calendar weeks, phone's local time) ---
+
+export type WeekStatus = 'past' | 'current' | 'future';
+
+export function weekStatus(p: UserFitnessProfile, week: number): WeekStatus {
+  const current = p.currentWeek || 1;
+  return week < current ? 'past' : week > current ? 'future' : 'current';
+}
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function startOfSunWeek(date: Date): Date {
+  const s = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  s.setDate(s.getDate() - s.getDay());
+  return s;
+}
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+export interface PlusOneTarget {
+  week: number;
+  /** True when the extra counts for the week before the current one. */
+  isPrevious: boolean;
+  days: { label: string; done: boolean; today: boolean }[];
+}
+
+/**
+ * Which week a +1 session started from the current week should count for: the previous week
+ * while the current week is still empty and today is in the same Sun–Sat week as the previous
+ * week's last workout; otherwise the current week.
+ */
+export function plusOneTarget(p: UserFitnessProfile, today: Date = new Date()): PlusOneTarget {
+  const current = p.currentWeek || 1;
+  const prev = current - 1;
+  const weekStart = startOfSunWeek(today);
+  const allDates = [
+    ...p.completedWorkouts.map((w) => new Date(w.dateCompleted)),
+    ...p.bonusSessions.map((b) => new Date(b.date)),
+  ].filter((x) => !Number.isNaN(x.getTime()));
+  const days = DAY_LABELS.map((label, i) => {
+    const day = new Date(weekStart);
+    day.setDate(weekStart.getDate() + i);
+    return { label, done: allDates.some((x) => sameDay(x, day)), today: sameDay(day, today) };
+  });
+
+  const currentStarted =
+    p.completedWorkouts.some((w) => w.weekNumber === current) || p.bonusSessions.some((b) => b.weekNumber === current);
+  const prevDates = [
+    ...p.completedWorkouts.filter((w) => w.weekNumber === prev).map((w) => new Date(w.dateCompleted)),
+    ...p.bonusSessions.filter((b) => b.weekNumber === prev).map((b) => new Date(b.date)),
+  ].filter((x) => !Number.isNaN(x.getTime()));
+  const usePrevious =
+    prev >= 1 &&
+    !currentStarted &&
+    !p.skippedWeeks?.includes(prev) &&
+    prevDates.length > 0 &&
+    startOfSunWeek(new Date(Math.max(...prevDates.map((x) => x.getTime())))).getTime() === weekStart.getTime();
+
+  return { week: usePrevious ? prev : current, isPrevious: usePrevious, days };
+}

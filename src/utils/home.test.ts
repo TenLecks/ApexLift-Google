@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from './testkit';
-import { estimateMinutes, nextWorkout } from './home';
+import { estimateMinutes, nextWorkout, plusOneTarget, weekStatus } from './home';
 import { getDefaultProfile } from './storage';
 import type { CompletedWorkoutSession, DayWorkoutTemplate } from '../types/workout';
 
@@ -49,4 +49,43 @@ await test('nextWorkout: a skipped week 12 with Day A done also completes the cy
 await test('nextWorkout: week 12 with Day B still to do is not complete', () => {
   const p = { ...getDefaultProfile(), currentWeek: 12, completedWorkouts: [done(12, 'Full Body A')] };
   assert.deepEqual(nextWorkout(p), { week: 12, dayType: 'Full Body B', resume: false, cycleComplete: false });
+});
+
+// --- week switcher + +1 safeguard (Sun–Sat calendar weeks, local time) ---
+const on = (week: number, dayType: 'Full Body A' | 'Full Body B', date: Date): CompletedWorkoutSession => ({
+  ...done(week, dayType), dateCompleted: date.toISOString(),
+});
+const d = (y: number, m: number, day: number, h = 18) => new Date(y, m - 1, day, h);
+// Oct 2026: Sun 11, Mon 12, Thu 15, Sat 17, Sun 18, Mon 19
+const week3Done = () => ({
+  ...getDefaultProfile(), currentWeek: 4,
+  completedWorkouts: [on(3, 'Full Body A', d(2026, 10, 12)), on(3, 'Full Body B', d(2026, 10, 15))],
+});
+
+await test('plusOneTarget: Saturday after finishing Week 3 Mon+Thu → counts for Week 3', () => {
+  const t = plusOneTarget(week3Done(), d(2026, 10, 17, 10));
+  assert.equal(t.week, 3);
+  assert.equal(t.isPrevious, true);
+});
+await test('plusOneTarget: the next Sunday starts a new calendar week → counts for Week 4', () => {
+  assert.deepEqual(plusOneTarget(week3Done(), d(2026, 10, 18, 9)).week, 4);
+});
+await test('plusOneTarget: once anything is logged in Week 4 it counts for Week 4', () => {
+  const p = week3Done();
+  p.bonusSessions = [{ id: 'b', date: d(2026, 10, 16).toISOString(), weekNumber: 4, type: 'yoga', title: '', durationMinutes: 20, fatigueScore: 1, sorenessScore: 1, perceivedEffort: 1, addedVolumeMuscles: [] }];
+  assert.equal(plusOneTarget(p, d(2026, 10, 17)).week, 4);
+});
+await test('plusOneTarget: previous week skipped or no previous week → current week', () => {
+  assert.equal(plusOneTarget({ ...getDefaultProfile(), currentWeek: 4, skippedWeeks: [3] }, d(2026, 10, 17)).week, 4);
+  assert.equal(plusOneTarget({ ...getDefaultProfile(), currentWeek: 1 }, d(2026, 10, 17)).week, 1);
+});
+await test('plusOneTarget: day strip runs Sun→Sat with workout days ticked and today marked', () => {
+  const t = plusOneTarget(week3Done(), d(2026, 10, 17, 10));
+  assert.deepEqual(t.days.map((x) => x.label), ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+  assert.deepEqual(t.days.filter((x) => x.done).map((x) => x.label), ['Mon', 'Thu']);
+  assert.deepEqual(t.days.filter((x) => x.today).map((x) => x.label), ['Sat']);
+});
+await test('weekStatus: past / current / future relative to the current week', () => {
+  const p = { ...getDefaultProfile(), currentWeek: 4 };
+  assert.deepEqual([3, 4, 5].map((w) => weekStatus(p, w)), ['past', 'current', 'future']);
 });
