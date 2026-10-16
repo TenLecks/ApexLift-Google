@@ -18,7 +18,7 @@ import { convertWeight } from './utils/progression';
 import { convertDraftUnits } from './utils/workoutSession';
 import { Navbar } from './components/Navbar';
 import { RoadmapView } from './components/RoadmapView';
-import { WorkoutView } from './components/WorkoutView';
+import { WorkoutScreen } from './components/workout/WorkoutScreen';
 import { WeeklyTargetsView } from './components/WeeklyTargetsView';
 import { ProgressVisualizationView } from './components/ProgressVisualizationView';
 import { BadgesView } from './components/BadgesView';
@@ -334,7 +334,7 @@ export default function App() {
         )}
 
         {currentTab === 'workout' && (
-          <WorkoutView
+          <WorkoutScreen
             profile={profile}
             selectedWeek={selectedWeek}
             onFinishWorkout={handleFinishWorkout}
