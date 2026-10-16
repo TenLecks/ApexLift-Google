@@ -1,6 +1,7 @@
 import { UserFitnessProfile, Badge } from '../types/workout';
 import { INITIAL_BADGES } from '../data/badgesData';
 import { calculate1RM } from './progression';
+import { ensureKg } from './units';
 
 const STORAGE_KEY = 'apexlift_fitness_profile_v1';
 
@@ -54,7 +55,7 @@ export function loadUserProfile(): UserFitnessProfile {
       saveUserProfile(defaultState);
       return defaultState;
     }
-    const parsed = normalizeProfile(JSON.parse(raw) as UserFitnessProfile);
+    const parsed = ensureKg(normalizeProfile(JSON.parse(raw) as UserFitnessProfile));
     // Evaluate streak & currentWeek on load so existing users get correct currentWeek immediately
     const evaluated = updateStreakAndBadges(parsed).profile;
     return evaluated;

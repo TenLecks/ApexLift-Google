@@ -15,8 +15,8 @@ import {
   seedSampleDemoData,
   getDefaultProfile,
 } from './utils/storage';
-import { convertWeight } from './utils/progression';
-import { convertDraftUnits, draftHasProgress } from './utils/workoutSession';
+import { draftHasProgress } from './utils/workoutSession';
+import { ensureKg } from './utils/units';
 import { RoadmapView } from './components/RoadmapView';
 import { WorkoutScreen } from './components/workout/WorkoutScreen';
 import { WeeklyTargetsView } from './components/WeeklyTargetsView';
@@ -81,67 +81,6 @@ export default function App() {
 
   const handleUpdateDraft = (draft: UserFitnessProfile['activeWorkoutDraft']) => {
     setProfile((prev) => ({ ...prev, activeWorkoutDraft: draft }));
-  };
-
-  const handleToggleUnit = () => {
-    const fromUnit = profile.weightUnit;
-    const toUnit = fromUnit === 'kg' ? 'lbs' : 'kg';
-
-    if (!window.confirm(`Convert all logged weights from ${fromUnit} to ${toUnit}?`)) {
-      return;
-    }
-
-    setProfile((prev) => {
-      // 1. Convert completedWorkouts
-      const convertedCompleted = prev.completedWorkouts.map((w) => ({
-        ...w,
-        exercises: w.exercises.map((ex) => ({
-          ...ex,
-          sets: ex.sets.map((s) => ({
-            ...s,
-            weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
-          })),
-        })),
-      }));
-
-      // 2. Convert bonusSessions
-      const convertedBonus = prev.bonusSessions.map((b) => ({
-        ...b,
-        exercisesLogged: b.exercisesLogged?.map((ex) => ({
-          ...ex,
-          sets: ex.sets.map((s) => ({
-            ...s,
-            weight: s.weight > 0 ? convertWeight(s.weight, fromUnit, toUnit) : s.weight,
-          })),
-        })),
-      }));
-
-      // 3. Convert weeklyTargets
-      const convertedTargets: Record<string, WeeklyExerciseTarget> = {};
-      Object.entries(prev.weeklyTargets).forEach(([key, t]) => {
-        convertedTargets[key] = {
-          ...t,
-          targetWeight: t.targetWeight > 0 ? convertWeight(t.targetWeight, fromUnit, toUnit) : t.targetWeight,
-        };
-      });
-
-      // 4. Convert activeWorkoutDraft
-      const convertedDraft = prev.activeWorkoutDraft
-        ? convertDraftUnits(prev.activeWorkoutDraft, fromUnit, toUnit)
-        : prev.activeWorkoutDraft;
-
-      const updated: UserFitnessProfile = {
-        ...prev,
-        weightUnit: toUnit,
-        completedWorkouts: convertedCompleted,
-        bonusSessions: convertedBonus,
-        weeklyTargets: convertedTargets,
-        activeWorkoutDraft: convertedDraft,
-      };
-
-      saveUserProfile(updated);
-      return updated;
-    });
   };
 
   const handleFinishWorkout = (session: CompletedWorkoutSession) => {
@@ -399,7 +338,7 @@ export default function App() {
             <BackupScreen
               profile={profile}
               onRestore={(restored) => {
-                const { profile: evaluated } = updateStreakAndBadges(normalizeProfile(restored));
+                const { profile: evaluated } = updateStreakAndBadges(ensureKg(normalizeProfile(restored)));
                 setProfile(evaluated);
                 setSelectedWeek(evaluated.currentWeek || 1);
               }}
@@ -457,10 +396,8 @@ export default function App() {
         ) : (
           <div className="pt-2">
             <MoreScreen
-              unit={profile.weightUnit}
               onOpen={setSub}
               onOpenRirGuide={() => setIsRirGuideOpen(true)}
-              onToggleUnit={handleToggleUnit}
               onLoadDemo={handleLoadDemoData}
               onReset={handleResetData}
             />

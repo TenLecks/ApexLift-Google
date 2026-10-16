@@ -1,14 +1,11 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { WeightUnit } from '../../types/workout';
 
 export type SubKey = 'roadmap' | 'targets' | 'badges' | 'backup' | 'updates';
 
 interface MoreScreenProps {
-  unit: WeightUnit;
   onOpen(sub: SubKey): void;
   onOpenRirGuide(): void;
-  onToggleUnit(): void;
   onLoadDemo(): void;
   onReset(): void;
 }
@@ -34,7 +31,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </div>
 );
 
-export const MoreScreen: React.FC<MoreScreenProps> = ({ unit, onOpen, onOpenRirGuide, onToggleUnit, onLoadDemo, onReset }) => (
+export const MoreScreen: React.FC<MoreScreenProps> = ({ onOpen, onOpenRirGuide, onLoadDemo, onReset }) => (
   <div className="space-y-5">
     <div className="-mx-4 -mt-4 mb-1 px-4 py-3 bg-frame text-frame-ink font-bold">More</div>
     <div className="mx-auto max-w-[480px] space-y-5">
@@ -49,7 +46,6 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ unit, onOpen, onOpenRirG
       <Row label="App updates" onClick={() => onOpen('updates')} />
     </Section>
     <Section title="Settings">
-      <Row label="Units" value={unit} onClick={onToggleUnit} />
       <Row label="Load demo data" onClick={onLoadDemo} />
       <Row label="Reset all data" danger onClick={onReset} />
     </Section>

@@ -197,7 +197,7 @@ export const BadgesView: React.FC<BadgesViewProps> = ({ profile }) => {
                     )}
 
                     {isUnlocked ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
                     ) : (
                       <Lock className="w-4 h-4 text-zinc-600" />
                     )}

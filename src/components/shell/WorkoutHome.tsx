@@ -144,7 +144,7 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
                       d.today
                         ? 'ring-1 ring-amber-400 text-amber-300 bg-zinc-800'
                         : d.done
-                          ? 'bg-emerald-500/20 text-emerald-300'
+                          ? 'bg-green-500/20 text-green-700'
                           : 'bg-zinc-800 text-zinc-500'
                     }`}
                   >
@@ -172,7 +172,7 @@ export const WorkoutHome: React.FC<WorkoutHomeProps> = ({ profile, viewWeek, onC
           return (
             <div key={d} className="text-sm">
               <div className="flex items-center gap-2">
-                {isDone(d) ? <Check className="w-4 h-4 text-emerald-400" /> : <Circle className="w-4 h-4 text-zinc-600" />}
+                {isDone(d) ? <Check className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-zinc-600" />}
                 <span className={isDone(d) ? 'text-zinc-400' : 'text-white'}>{d}</span>
                 {status === 'past' && isDone(d) && (
                   <button type="button" onClick={() => onView(viewWeek, d)} className="ml-auto flex items-center gap-1 text-xs text-emerald-400">

@@ -58,7 +58,7 @@ export const ExerciseItem: React.FC<ExerciseItemProps> = ({
         }`}
       >
         <span className="flex items-center gap-2 min-w-0">
-          {isDone ? <Check className="w-4 h-4 text-emerald-500 shrink-0" /> : <span className="w-4 text-xs text-zinc-500 shrink-0">{index + 1}</span>}
+          {isDone ? <Check className="w-4 h-4 text-green-600 shrink-0" /> : <span className="w-4 text-xs text-zinc-500 shrink-0">{index + 1}</span>}
           <span className="truncate font-semibold text-sm">{name}</span>
         </span>
         <span className="text-xs text-zinc-500 shrink-0 font-mono">
@@ -156,7 +156,7 @@ export const ExerciseItem: React.FC<ExerciseItemProps> = ({
               ) : null}
               <span className="ml-auto text-xs font-sans">
                 {s.completed ? (
-                  <Check className="w-4 h-4 text-emerald-400" />
+                  <Check className="w-4 h-4 text-green-600" />
                 ) : s.id === pendingSetId ? (
                   <span className="text-emerald-400 flex items-center">next <ChevronRight className="w-3 h-3" /></span>
                 ) : null}

@@ -227,7 +227,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                         <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900 border border-zinc-800/80 text-xs">
                           <span className="font-medium text-zinc-200">Full Body A</span>
                           {hasA ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
                           ) : (
                             <button
                               onClick={(e) => {
@@ -245,7 +245,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                         <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900 border border-zinc-800/80 text-xs">
                           <span className="font-medium text-zinc-200">Full Body B</span>
                           {hasB ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
                           ) : (
                             <button
                               onClick={(e) => {

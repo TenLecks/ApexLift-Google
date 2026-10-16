@@ -1,37 +1,38 @@
 @import "tailwindcss";
 
 /*
- * Light "white & green" theme (option B).
+ * Light "electric blue" theme.
  * The UI was written for a dark palette, so instead of rewriting every class we remap the
  * palette: zinc becomes a light-to-ink scale (950 = page, 900 = cards, 100 = darkest text),
  * `white` becomes the heading ink, and accent text shades are darkened for contrast on white.
- * The deep-green frame (top bars, bottom tabs) uses the `frame` tokens below.
+ * The blue→cyan frame (top bars, bottom tabs) and primary buttons use gradients below.
+ * Green is kept only for "done" marks (text-green-* classes), so they stand out.
  */
 @theme {
-  --color-white: #14271c;
+  --color-white: #0f1b33;
 
-  --color-zinc-50: #0d1f15;
-  --color-zinc-100: #14271c;
-  --color-zinc-200: #1f3127;
-  --color-zinc-300: #2f4438;
-  --color-zinc-400: #5b7466;
-  --color-zinc-500: #71857a;
-  --color-zinc-600: #98ab9f;
-  --color-zinc-700: #c7dccd;
-  --color-zinc-800: #e3efe7;
+  --color-zinc-50: #0a1426;
+  --color-zinc-100: #0f1b33;
+  --color-zinc-200: #1c2a45;
+  --color-zinc-300: #2c3b58;
+  --color-zinc-400: #5a6b8c;
+  --color-zinc-500: #6f7f9d;
+  --color-zinc-600: #9aa8c2;
+  --color-zinc-700: #c9d5ea;
+  --color-zinc-800: #e6edf9;
   --color-zinc-900: #ffffff;
-  --color-zinc-950: #f6faf7;
+  --color-zinc-950: #f5f8ff;
 
-  --color-emerald-200: #065f46;
-  --color-emerald-300: #047857;
-  --color-emerald-400: #047857;
-  --color-emerald-500: #059669;
-  --color-emerald-950: #ecfdf5;
+  --color-emerald-200: #1e40af;
+  --color-emerald-300: #1d4ed8;
+  --color-emerald-400: #1d4ed8;
+  --color-emerald-500: #2563eb;
+  --color-emerald-950: #eff6ff;
 
-  --color-teal-300: #0f766e;
-  --color-teal-400: #0f766e;
-  --color-teal-500: #0d9488;
-  --color-teal-950: #f0fdfa;
+  --color-teal-300: #0e7490;
+  --color-teal-400: #0e7490;
+  --color-teal-500: #0891b2;
+  --color-teal-950: #ecfeff;
 
   --color-amber-200: #92400e;
   --color-amber-300: #b45309;
@@ -56,13 +57,23 @@
   --color-slate-300: #475569;
   --color-slate-400: #64748b;
 
-  /* Deep-green frame: top bars and bottom tabs */
-  --color-frame: #065f46;
-  --color-frame-2: #047857;
-  --color-frame-ink: #ecfdf5;
-  --color-frame-muted: #a7f3d0;
+  /* Blue→cyan frame: top bars and bottom tabs */
+  --color-frame: #2563eb;
+  --color-frame-2: rgb(255 255 255 / 0.18);
+  --color-frame-ink: #ffffff;
+  --color-frame-muted: #dbeafe;
 }
 
 body {
   background: var(--color-zinc-950);
+}
+
+/* Gradients for the frame and primary buttons (colour utilities can't hold gradients). */
+@layer utilities {
+  .bg-frame {
+    background-image: linear-gradient(135deg, #2563eb, #06b6d4);
+  }
+  .bg-emerald-500 {
+    background-image: linear-gradient(135deg, #2563eb, #0891b2);
+  }
 }

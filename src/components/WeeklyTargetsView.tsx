@@ -184,7 +184,7 @@ export const WeeklyTargetsView: React.FC<WeeklyTargetsViewProps> = ({
       {/* Success banner */}
       {savedSuccess && (
         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <CheckCircle2 className="w-4 h-4 text-green-600" />
           <span>Targets successfully saved for Week {selectedWeek}! They will appear as your goals in the Workout Logger.</span>
         </div>
       )}
