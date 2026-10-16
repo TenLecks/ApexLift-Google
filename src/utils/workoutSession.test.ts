@@ -7,6 +7,8 @@ import {
   nextPendingSet,
   topSet,
   updateSet,
+  draftHasProgress,
+  pickDayType,
 } from './workoutSession';
 import type { ExerciseDefinition, LoggedExercise, UserFitnessProfile } from '../types/workout';
 import type { ExercisePlan } from './nextTargets';
@@ -89,4 +91,20 @@ await test('convertDraftUnits converts set weights and target weights, round-tri
   assert.equal(lbs.targetWeights!.rdl, 220.5);
   const back = convertDraftUnits(lbs, 'lbs', 'kg');
   assert.equal(back.exercises[0].sets.find((s) => s.id === 'rdl-s1')!.weight, 100);
+});
+
+const draftOf = (over: Partial<NonNullable<UserFitnessProfile['activeWorkoutDraft']>>) => ({
+  weekNumber: 3, dayType: 'Full Body A' as const, startedAt: '2026-10-16T10:00:00Z', exercises: [fresh()], ...over,
+});
+await test('draftHasProgress: a logged set or a changed weight counts as progress', () => {
+  assert.equal(draftHasProgress(null), false);
+  assert.equal(draftHasProgress(draftOf({})), false);
+  assert.equal(draftHasProgress(draftOf({ hasWeightChanged: true })), true);
+  assert.equal(draftHasProgress(draftOf({ exercises: [updateSet(fresh(), 'rdl-s1', { completed: true })] })), true);
+});
+await test('pickDayType: the day you asked for wins over a draft for the same week', () => {
+  assert.equal(pickDayType(draftOf({ hasWeightChanged: true }), 3, 'Full Body B'), 'Full Body B');
+  assert.equal(pickDayType(draftOf({}), 3, undefined), 'Full Body A');
+  assert.equal(pickDayType(draftOf({ dayType: 'Full Body B' }), 3, undefined), 'Full Body B');
+  assert.equal(pickDayType(draftOf({ dayType: 'Full Body B' }), 4, undefined), 'Full Body A');
 });

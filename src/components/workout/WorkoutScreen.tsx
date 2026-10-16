@@ -5,7 +5,7 @@ import type { CompletedWorkoutSession, LoggedExercise, LoggedSet, UserFitnessPro
 import { PROGRAM_WEEKS } from '../../data/programData';
 import { planExercise, weightStep, type ExercisePlan } from '../../utils/nextTargets';
 import { isDeloadWeek } from '../../utils/progression';
-import { applyTargetWeight, buildExerciseLog, nextPendingSet, updateSet } from '../../utils/workoutSession';
+import { applyTargetWeight, buildExerciseLog, nextPendingSet, pickDayType, updateSet } from '../../utils/workoutSession';
 import { useRestCountdown } from '../../hooks/useRestCountdown';
 import { sounds } from '../../utils/audio';
 import { WarmupPyramidModal } from '../WarmupPyramidModal';
@@ -48,11 +48,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
 }) => {
   const weekPlan = PROGRAM_WEEKS.find((w) => w.weekNumber === selectedWeek) || PROGRAM_WEEKS[0];
   const unit = profile.weightUnit;
-  const [dayType, setDayType] = useState<DayType>(() => {
-    const d = profile.activeWorkoutDraft;
-    if (d && d.weekNumber === selectedWeek) return d.dayType;
-    return initialDayType ?? 'Full Body A';
-  });
+  const [dayType, setDayType] = useState<DayType>(() => pickDayType(profile.activeWorkoutDraft, selectedWeek, initialDayType));
   const template = dayType === 'Full Body A' ? weekPlan.workouts.dayA : weekPlan.workouts.dayB;
   const order = useMemo(() => template.exercises.map((e) => e.id), [template]);
   const defs = useMemo(() => Object.fromEntries(template.exercises.map((e) => [e.id, e])), [template]);
@@ -218,8 +214,9 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({
   const switchDay = () => {
     setTopMenuOpen(false);
     const target: DayType = dayType === 'Full Body A' ? 'Full Body B' : 'Full Body A';
-    if (anyLogged && !window.confirm(`You have an unfinished ${dayType} workout. Switch anyway and discard it?`)) return;
-    if (anyLogged) onUpdateDraft?.(null);
+    const hasProgress = anyLogged || dirty;
+    if (hasProgress && !window.confirm(`You have an unfinished ${dayType} workout. Switch anyway and discard it?`)) return;
+    if (hasProgress) onUpdateDraft?.(null);
     rest.skip();
     setDayType(target);
   };

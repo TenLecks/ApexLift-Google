@@ -16,7 +16,7 @@ import {
   getDefaultProfile,
 } from './utils/storage';
 import { convertWeight } from './utils/progression';
-import { convertDraftUnits } from './utils/workoutSession';
+import { convertDraftUnits, draftHasProgress } from './utils/workoutSession';
 import { RoadmapView } from './components/RoadmapView';
 import { WorkoutScreen } from './components/workout/WorkoutScreen';
 import { WeeklyTargetsView } from './components/WeeklyTargetsView';
@@ -207,7 +207,7 @@ export default function App() {
   const handleSelectWeek = (week: number) => {
     if (week === selectedWeek) return;
     const draft = profile.activeWorkoutDraft;
-    const hasCompletedSet = draft?.exercises.some((ex) => ex.sets.some((s) => s.completed));
+    const hasCompletedSet = draftHasProgress(draft);
     if (draft && draft.weekNumber !== week && hasCompletedSet) {
       const confirmed = window.confirm(
         `You have an unfinished ${draft.dayType} workout. Switch anyway and discard it?`
@@ -222,7 +222,7 @@ export default function App() {
 
   const handleStartWorkout = (week: number, dayType: 'Full Body A' | 'Full Body B') => {
     const draft = profile.activeWorkoutDraft;
-    const hasCompletedSet = draft?.exercises.some((ex) => ex.sets.some((s) => s.completed));
+    const hasCompletedSet = draftHasProgress(draft);
     if (draft && (draft.weekNumber !== week || draft.dayType !== dayType) && hasCompletedSet) {
       const confirmed = window.confirm(
         `You have an unfinished ${draft.dayType} workout. Switch anyway and discard it?`
@@ -321,11 +321,8 @@ export default function App() {
     setIsAdaptiveBonusOpen(true);
   };
 
-  const startWorkoutFromHome = (week: number, dayType: 'Full Body A' | 'Full Body B') => {
-    setSelectedWeek(week);
-    setWorkoutDay(dayType);
-    setInWorkout(true);
-  };
+  // Same confirmation as the roadmap when another day's draft has progress.
+  const startWorkoutFromHome = (week: number, dayType: 'Full Body A' | 'Full Body B') => handleStartWorkout(week, dayType);
 
   const openExtra = (week: number) => {
     setAdaptiveBonusWeek(week);
@@ -424,7 +421,7 @@ export default function App() {
           renderSub()
         ) : tab === 'workout' ? (
           <div className="pt-2">
-            <WorkoutHome profile={profile} onStart={startWorkoutFromHome} onExtra={openExtra} />
+            <WorkoutHome profile={profile} onStart={startWorkoutFromHome} onExtra={openExtra} onStartNewCycle={handleStartNewCycle} />
           </div>
         ) : tab === 'stats' ? (
           <div className="pt-2">

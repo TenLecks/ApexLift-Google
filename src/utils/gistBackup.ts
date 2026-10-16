@@ -54,8 +54,8 @@ function setStatus(store: KeyValueStore, s: BackupStatus) {
 }
 
 export function countWorkouts(p: UserFitnessProfile): number {
-  const past = (p.pastCycles ?? []).reduce((n, c) => n + c.completedWorkouts.length + c.bonusSessions.length, 0);
-  return p.completedWorkouts.length + p.bonusSessions.length + past;
+  const past = (p.pastCycles ?? []).reduce((n, c) => n + (c.completedWorkouts?.length ?? 0) + (c.bonusSessions?.length ?? 0), 0);
+  return (p.completedWorkouts?.length ?? 0) + (p.bonusSessions?.length ?? 0) + past;
 }
 
 function workoutIds(p: UserFitnessProfile): string[] {
@@ -63,7 +63,7 @@ function workoutIds(p: UserFitnessProfile): string[] {
   return [
     ...(p.completedWorkouts ?? []),
     ...(p.bonusSessions ?? []),
-    ...cycles.flatMap((c) => [...c.completedWorkouts, ...c.bonusSessions]),
+    ...cycles.flatMap((c) => [...(c.completedWorkouts ?? []), ...(c.bonusSessions ?? [])]),
   ].map((x) => x.id);
 }
 
@@ -137,8 +137,19 @@ async function resolveGistId(token: string, store: KeyValueStore, fetchFn: typeo
   return found;
 }
 
+// One backup at a time: a Finish-triggered backup and a start-up retry must not both create a gist.
+let inFlight: Promise<BackupStatus> | null = null;
+
 /** Runs after a finished workout. Never throws; failures are recorded as "pending". */
-export async function autoBackup(profile: UserFitnessProfile, o: Opts & { force?: boolean } = {}): Promise<BackupStatus> {
+export function autoBackup(profile: UserFitnessProfile, o: Opts & { force?: boolean } = {}): Promise<BackupStatus> {
+  if (inFlight) return inFlight;
+  inFlight = runBackup(profile, o).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function runBackup(profile: UserFitnessProfile, o: Opts & { force?: boolean }): Promise<BackupStatus> {
   const store = storeOf(o);
   const fetchFn = fetchOf(o);
   const prev = getBackupStatus(store);
@@ -195,4 +206,10 @@ export async function locateBackup(token: string, o: Opts = {}) {
   store.setItem(GIST_ID_KEY, id);
   const data = await readBackup(token, id, fetchFn);
   return data ? { ...data, count: countWorkouts(data.profile) } : null;
+}
+
+/** After a restore the phone matches GitHub again, so drop the "GitHub has more workouts" warning. */
+export function clearBackupWarning(store: KeyValueStore = globalThis.localStorage): void {
+  const { blockedReason: _b, remoteCount: _r, ...rest } = getBackupStatus(store);
+  setStatus(store, rest);
 }

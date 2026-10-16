@@ -104,3 +104,17 @@ export function convertDraftUnits(draft: Draft, from: WeightUnit, to: WeightUnit
     baseWorkingWeights: convMap(draft.baseWorkingWeights),
   };
 }
+
+/** A draft is worth protecting once a set was logged or a weight was changed. */
+export function draftHasProgress(draft: Draft | null | undefined): boolean {
+  if (!draft) return false;
+  return Boolean(draft.hasWeightChanged) || draft.exercises.some((e) => e.sets.some((s) => s.completed));
+}
+
+type DayType = Draft['dayType'];
+/** The day the user asked for wins; otherwise resume the draft's day for this week. */
+export function pickDayType(draft: Draft | null | undefined, week: number, requested: DayType | undefined): DayType {
+  if (requested) return requested;
+  if (draft && draft.weekNumber === week) return draft.dayType;
+  return 'Full Body A';
+}

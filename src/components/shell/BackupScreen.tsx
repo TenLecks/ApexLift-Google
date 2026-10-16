@@ -3,6 +3,7 @@ import { CloudUpload, Copy, Download, KeyRound } from 'lucide-react';
 import type { UserFitnessProfile } from '../../types/workout';
 import {
   autoBackup,
+  clearBackupWarning,
   countWorkouts,
   getBackupStatus,
   getToken,
@@ -94,6 +95,8 @@ export const BackupScreen: React.FC<BackupScreenProps> = ({ profile, onRestore }
   const restore = (f: Found) => {
     if (!window.confirm(`Replace all data on this phone with the backup from ${new Date(f.updatedAt).toLocaleString()} (${f.count} workouts)?`)) return;
     onRestore(f.profile);
+    clearBackupWarning();
+    setStatus(getBackupStatus());
     setFound(null);
     setMessage('Restored from GitHub.');
   };
@@ -104,6 +107,8 @@ export const BackupScreen: React.FC<BackupScreenProps> = ({ profile, onRestore }
       if (!Array.isArray(parsed.completedWorkouts)) throw new Error('Not an ApexLift backup.');
       if (!window.confirm(`Replace all data on this phone with this backup (${countWorkouts(parsed)} workouts)?`)) return;
       onRestore(parsed);
+      clearBackupWarning();
+      setStatus(getBackupStatus());
       setPasteText('');
       setMessage('Restored from pasted backup.');
     } catch (e) {

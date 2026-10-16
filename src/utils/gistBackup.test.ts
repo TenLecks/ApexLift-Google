@@ -3,6 +3,7 @@ import { test } from './testkit';
 import {
   GIST_FILENAME,
   autoBackup,
+  clearBackupWarning,
   countWorkouts,
   getBackupStatus,
   setToken,
@@ -146,4 +147,24 @@ await test('replacing the token forgets the cached gist id', () => {
   const store = memStore({ apexlift_github_pat: 'old', apexlift_github_gist_id: 'g1' });
   setToken('ghp_new', { store });
   assert.equal(store.getItem('apexlift_github_gist_id'), null);
+});
+
+await test('countWorkouts tolerates a very old backup missing its lists', () => {
+  assert.equal(countWorkouts({} as UserFitnessProfile), 0);
+});
+await test('clearBackupWarning removes the "GitHub has more workouts" warning after a restore', () => {
+  const store = memStore({ apexlift_backup_status: JSON.stringify({ blockedReason: 'x', remoteCount: 5, lastSuccessAt: 't' }) });
+  clearBackupWarning(store);
+  const s = getBackupStatus(store);
+  assert.equal(s.blockedReason, undefined);
+  assert.equal(s.remoteCount, undefined);
+  assert.equal(s.lastSuccessAt, 't');
+});
+await test('two backups started at the same moment create only one gist', async () => {
+  const store = memStore({ apexlift_github_pat: TOKEN });
+  const { fn, calls } = fakeFetch((c) =>
+    c.url.includes('/gists?') ? { status: 200, json: [] } : { status: 201, json: { id: 'new1' } }
+  );
+  await Promise.all([autoBackup(profileWith(1), { fetchFn: fn, store }), autoBackup(profileWith(1), { fetchFn: fn, store })]);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 1);
 });
