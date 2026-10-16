@@ -25,6 +25,27 @@ export function getDefaultProfile(): UserFitnessProfile {
   };
 }
 
+/** Fill fields that older saved data (or an older backup) may lack. */
+export function normalizeProfile(input: UserFitnessProfile): UserFitnessProfile {
+  const parsed: UserFitnessProfile = { ...getDefaultProfile(), ...input };
+  // Ensure all badges exist in case new ones were added
+  const mergedBadges: Record<string, Badge> = { ...INITIAL_BADGES };
+  if (input.badges) {
+    Object.keys(input.badges).forEach((k) => {
+      mergedBadges[k] = { ...mergedBadges[k], ...input.badges[k] };
+    });
+  }
+  parsed.badges = mergedBadges;
+  if (!parsed.currentCycle) parsed.currentCycle = 1;
+  if (!parsed.pastCycles) parsed.pastCycles = [];
+  if (!parsed.exerciseNotes) parsed.exerciseNotes = {};
+  if (!parsed.skippedWeeks) parsed.skippedWeeks = [];
+  if (!parsed.completedWorkouts) parsed.completedWorkouts = [];
+  if (!parsed.bonusSessions) parsed.bonusSessions = [];
+  if (!parsed.weeklyTargets) parsed.weeklyTargets = {};
+  return parsed;
+}
+
 export function loadUserProfile(): UserFitnessProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -33,19 +54,7 @@ export function loadUserProfile(): UserFitnessProfile {
       saveUserProfile(defaultState);
       return defaultState;
     }
-    const parsed = JSON.parse(raw) as UserFitnessProfile;
-    // Ensure all badges exist in case new ones were added
-    const mergedBadges: Record<string, Badge> = { ...INITIAL_BADGES };
-    if (parsed.badges) {
-      Object.keys(parsed.badges).forEach((k) => {
-        mergedBadges[k] = { ...mergedBadges[k], ...parsed.badges[k] };
-      });
-    }
-    parsed.badges = mergedBadges;
-    if (!parsed.currentCycle) parsed.currentCycle = 1;
-    if (!parsed.pastCycles) parsed.pastCycles = [];
-    if (!parsed.exerciseNotes) parsed.exerciseNotes = {};
-    if (!parsed.skippedWeeks) parsed.skippedWeeks = [];
+    const parsed = normalizeProfile(JSON.parse(raw) as UserFitnessProfile);
     // Evaluate streak & currentWeek on load so existing users get correct currentWeek immediately
     const evaluated = updateStreakAndBadges(parsed).profile;
     return evaluated;

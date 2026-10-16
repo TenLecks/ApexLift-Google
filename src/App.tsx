@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   UserFitnessProfile,
   CompletedWorkoutSession,
@@ -8,6 +8,7 @@ import {
   PastCycle,
 } from './types/workout';
 import {
+  normalizeProfile,
   loadUserProfile,
   saveUserProfile,
   updateStreakAndBadges,
@@ -23,7 +24,8 @@ import { ProgressVisualizationView } from './components/ProgressVisualizationVie
 import { BadgesView } from './components/BadgesView';
 import { AdaptiveBonusModal } from './components/AdaptiveBonusModal';
 import { RirGuideModal } from './components/RirGuideModal';
-import { CloudBackupModal } from './components/CloudBackupModal';
+import { BackupScreen } from './components/shell/BackupScreen';
+import { autoBackup, retryPendingBackup } from './utils/gistBackup';
 import { Award, X } from 'lucide-react';
 import { BottomTabs, type TabKey } from './components/shell/BottomTabs';
 import { SubScreen } from './components/shell/SubScreen';
@@ -54,6 +56,16 @@ export default function App() {
   useEffect(() => {
     saveUserProfile(profile);
   }, [profile]);
+
+  // Retry a backup that failed (e.g. offline at the gym) on start and when back online.
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
+  useEffect(() => {
+    const retry = () => void retryPendingBackup(() => profileRef.current);
+    retry();
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, []);
 
   const handleUpdateDraft = (draft: UserFitnessProfile['activeWorkoutDraft']) => {
     setProfile((prev) => ({ ...prev, activeWorkoutDraft: draft }));
@@ -136,6 +148,7 @@ export default function App() {
 
     const { profile: evaluated, newlyUnlockedBadges } = updateStreakAndBadges(updatedProfile);
     setProfile(evaluated);
+    void autoBackup(evaluated);
 
     if (newlyUnlockedBadges.length > 0) {
       setBadgeToast(newlyUnlockedBadges[0]);
@@ -151,6 +164,7 @@ export default function App() {
 
     const { profile: evaluated, newlyUnlockedBadges } = updateStreakAndBadges(updatedProfile);
     setProfile(evaluated);
+    void autoBackup(evaluated);
 
     if (newlyUnlockedBadges.length > 0) {
       setBadgeToast(newlyUnlockedBadges[0]);
@@ -365,13 +379,12 @@ export default function App() {
       case 'backup':
         return (
           <SubScreen title="Back up / Restore" onBack={() => setSub(null)}>
-            <CloudBackupModal
-              isOpen
-              onClose={() => setSub(null)}
+            <BackupScreen
               profile={profile}
-              onRestoreProfile={(restored) => {
-                setProfile(restored);
-                setSelectedWeek(restored.currentWeek || 1);
+              onRestore={(restored) => {
+                const { profile: evaluated } = updateStreakAndBadges(normalizeProfile(restored));
+                setProfile(evaluated);
+                setSelectedWeek(evaluated.currentWeek || 1);
               }}
             />
           </SubScreen>
